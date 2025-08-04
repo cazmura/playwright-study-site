@@ -961,13 +961,13 @@ export default function PlaywrightLearningApp() {
   }
 
   // resetProgress関数の後に、進捗リセット用のヘルパー関数を追加
-  // resetProgressData関数を以下のように変更
   const resetProgressData = () => {
     setUserProgress((prev) => ({
       ...prev,
       solvedProblems: [], // 解答済み問題のみクリア
       totalSolved: 0, // 総解答数のみクリア
-      // currentLevel, dailyActivity, lastActivityDateは保持
+      currentLevel: 1, // レベルもリセット
+      // dailyActivity, lastActivityDateは保持
     }))
   }
 
@@ -975,7 +975,7 @@ export default function PlaywrightLearningApp() {
   const addProblem = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
     if (
       confirm(
-        "問題を追加すると進捗率（解答済み問題数）がリセットされます。レベルと学習カレンダーは保持されます。続行しますか？",
+        "問題を追加すると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？",
       )
     ) {
       const newProblem: Problem = {
@@ -986,7 +986,7 @@ export default function PlaywrightLearningApp() {
       }
       setProblems((prev) => [...prev, newProblem])
       resetProgressData()
-      alert("問題を追加し、進捗率をリセットしました。")
+      alert("問題を追加し、進捗率とレベルをリセットしました。")
     }
   }
 
@@ -994,12 +994,12 @@ export default function PlaywrightLearningApp() {
   const importProblems = (importedProblems: Problem[]): boolean => {
     if (
       confirm(
-        `${importedProblems.length}個の問題をインポートすると進捗率（解答済み問題数）がリセットされます。レベルと学習カレンダーは保持されます。続行しますか？`,
+        `${importedProblems.length}個の問題をインポートすると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？`,
       )
     ) {
       setProblems((prev) => [...prev, ...importedProblems])
       resetProgressData()
-      alert(`${importedProblems.length}個の問題をインポートし、進捗率をリセットしました。`)
+      alert(`${importedProblems.length}個の問題をインポートし、進捗率とレベルをリセットしました。`)
       return true
     }
     return false
@@ -1009,12 +1009,12 @@ export default function PlaywrightLearningApp() {
   const deleteProblem = (id: string) => {
     if (
       confirm(
-        "問題を削除すると進捗率（解答済み問題数）がリセットされます。レベルと学習カレンダーは保持されます。続行しますか？",
+        "問題を削除すると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？",
       )
     ) {
       setProblems((prev) => prev.filter((p) => p.id !== id))
       resetProgressData()
-      alert("問題を削除し、進捗率をリセットしました。")
+      alert("問題を削除し、進捗率とレベルをリセットしました。")
     }
   }
 
@@ -1385,7 +1385,7 @@ export default function PlaywrightLearningApp() {
                       • <strong>学習進捗リセット</strong>: 全ての学習データを初期化
                     </li>
                     <li>
-                      • <strong>部分リセット</strong>: 問題変更時は進捗率のみリセット
+                      • <strong>部分リセット</strong>: 問題変更時は進捗率とレベルのみリセット
                     </li>
                   </ul>
                 </div>
