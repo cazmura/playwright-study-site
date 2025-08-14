@@ -17,6 +17,10 @@ import {
   EyeOff,
   Download,
   Upload,
+  Folder,
+  FolderPlus,
+  Cog,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +28,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 
 // データ型定義
 interface Problem {
@@ -35,6 +41,16 @@ interface Problem {
   hints: string[]
   difficulty: number
   category: string
+  folderId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface FolderType {
+  id: string
+  name: string
+  description: string
+  color: string
   createdAt: Date
   updatedAt: Date
 }
@@ -55,6 +71,12 @@ interface LearningSession {
   startedAt: Date
   isCompleted: boolean
   answersShown: Set<string>
+  selectedFolders: string[]
+}
+
+interface AppSettings {
+  normalizeQuotes: boolean // シングルクォートとダブルクォートを同一として扱うかどうか
+  normalizeSpaces: boolean // 空欄（スペース）を正規化するかどうか
 }
 
 // 出題方法の型定義を追加
@@ -72,6 +94,37 @@ const questionOrderOptions: QuestionOrder[] = [
   { type: "hard-first", label: "難易度が高いものから優先" },
 ]
 
+// デフォルトフォルダ
+const defaultFolder: FolderType = {
+  id: "default",
+  name: "未分類",
+  description: "フォルダが指定されていない問題",
+  color: "bg-gray-100",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+}
+
+// サンプルフォルダデータ
+const sampleFolders: FolderType[] = [
+  defaultFolder,
+  {
+    id: "basic",
+    name: "基本操作",
+    description: "Playwrightの基本的な操作を学習",
+    color: "bg-blue-100",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "advanced",
+    name: "応用操作",
+    description: "より高度なPlaywright操作",
+    color: "bg-purple-100",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+]
+
 // サンプル問題データ
 const sampleProblems: Problem[] = [
   {
@@ -87,6 +140,7 @@ const sampleProblems: Problem[] = [
     ],
     difficulty: 1,
     category: "要素選択",
+    folderId: "basic",
     createdAt: new Date(),
     updatedAt: new Date(),
   },
@@ -99,6 +153,7 @@ const sampleProblems: Problem[] = [
     hints: ["IDセレクタは#を使います", "submit-btnがIDです", "locator()でセレクタを指定します"],
     difficulty: 1,
     category: "要素選択",
+    folderId: "basic",
     createdAt: new Date(),
     updatedAt: new Date(),
   },
@@ -115,6 +170,7 @@ const sampleProblems: Problem[] = [
     ],
     difficulty: 2,
     category: "アクション実行",
+    folderId: "basic",
     createdAt: new Date(),
     updatedAt: new Date(),
   },
@@ -130,6 +186,7 @@ const sampleProblems: Problem[] = [
     hints: ["waitFor()メソッドを使用します", 'state: "hidden"で非表示を待機します', "クラスセレクタは.を使います"],
     difficulty: 3,
     category: "待機処理",
+    folderId: "advanced",
     createdAt: new Date(),
     updatedAt: new Date(),
   },
@@ -145,10 +202,17 @@ const sampleProblems: Problem[] = [
     hints: ["expect()とtoHaveText()を使用します", "h1要素を選択します", "テキストの内容を検証します"],
     difficulty: 2,
     category: "アサーション",
+    folderId: "advanced",
     createdAt: new Date(),
     updatedAt: new Date(),
   },
 ]
+
+// デフォルト設定
+const defaultSettings: AppSettings = {
+  normalizeQuotes: true, // デフォルトではクォートを正規化する
+  normalizeSpaces: true, // デフォルトでは空欄を正規化する
+}
 
 // キャラクター定義
 const getCharacterInfo = (level: number) => {
@@ -272,25 +336,355 @@ const CodeEditor = ({
   )
 }
 
+// 解答比較コンポーネント
+const AnswerComparison = ({
+  userAnswer,
+  correctAnswer,
+  onClose,
+}: {
+  userAnswer: string
+  correctAnswer: string
+  onClose: () => void
+}) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-6xl max-h-[90vh] overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>解答比較</CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X size={16} />
+          </Button>
+        </CardHeader>
+        <CardContent className="overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* ユーザーの解答 */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-red-600">あなたの解答</h3>
+              <div className="bg-gray-900 rounded-lg overflow-hidden">
+                <div className="p-3 bg-gray-800">
+                  <span className="text-gray-300 text-sm font-mono">your-answer.js</span>
+                </div>
+                <div className="p-4">
+                  <pre className="text-gray-100 font-mono text-sm whitespace-pre-wrap">
+                    {userAnswer || "（解答が入力されていません）"}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* 正解 */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-green-600">正解</h3>
+              <div className="bg-gray-900 rounded-lg overflow-hidden">
+                <div className="p-3 bg-gray-800">
+                  <span className="text-gray-300 text-sm font-mono">correct-answer.js</span>
+                </div>
+                <div className="p-4">
+                  <pre className="text-gray-100 font-mono text-sm whitespace-pre-wrap">{correctAnswer}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <h4 className="font-medium text-blue-800 mb-2">💡 学習のポイント</h4>
+            <p className="text-blue-700 text-sm">
+              左側があなたの解答、右側が正解です。違いを比較して、正しい書き方を覚えましょう。
+              解答を参考にして、もう一度挑戦してみてください！
+            </p>
+          </div>
+
+          <div className="mt-4 flex justify-center">
+            <Button onClick={onClose} className="px-8">
+              比較を閉じる
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// 設定管理コンポーネント
+const SettingsManager = ({
+  settings,
+  onUpdate,
+}: {
+  settings: AppSettings
+  onUpdate: (settings: AppSettings) => void
+}) => {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>アプリケーション設定</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">回答判定設定</h3>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="normalize-quotes">クォート正規化</Label>
+              <p className="text-sm text-gray-600">シングルクォート（'）とダブルクォート（"）を同一として扱います</p>
+            </div>
+            <Switch
+              id="normalize-quotes"
+              checked={settings.normalizeQuotes}
+              onCheckedChange={(checked) =>
+                onUpdate({
+                  ...settings,
+                  normalizeQuotes: checked,
+                })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="normalize-spaces">空欄正規化</Label>
+              <p className="text-sm text-gray-600">複数の空欄を1つにまとめ、前後の空欄を削除します</p>
+            </div>
+            <Switch
+              id="normalize-spaces"
+              checked={settings.normalizeSpaces}
+              onCheckedChange={(checked) =>
+                onUpdate({
+                  ...settings,
+                  normalizeSpaces: checked,
+                })
+              }
+            />
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-medium text-blue-800 mb-2">設定の説明</h4>
+            <div className="text-blue-700 text-sm space-y-3">
+              <div>
+                <strong>クォート正規化 ON:</strong>
+                <div className="ml-4 mt-1">
+                  <code className="bg-white px-2 py-1 rounded">page.locator('button')</code> と{" "}
+                  <code className="bg-white px-2 py-1 rounded">page.locator("button")</code> は同じとして扱われます
+                </div>
+              </div>
+              <div>
+                <strong>クォート正規化 OFF:</strong>
+                <div className="ml-4 mt-1">
+                  <code className="bg-white px-2 py-1 rounded">page.locator('button')</code> と{" "}
+                  <code className="bg-white px-2 py-1 rounded">page.locator("button")</code> は別物として扱われます
+                </div>
+              </div>
+              <div>
+                <strong>空欄正規化 ON:</strong>
+                <div className="ml-4 mt-1">
+                  <code className="bg-white px-2 py-1 rounded">page.locator( 'button' )</code> と{" "}
+                  <code className="bg-white px-2 py-1 rounded">page.locator('button')</code> は同じとして扱われます
+                </div>
+              </div>
+              <div>
+                <strong>空欄正規化 OFF:</strong>
+                <div className="ml-4 mt-1">
+                  <code className="bg-white px-2 py-1 rounded">page.locator( 'button' )</code> と{" "}
+                  <code className="bg-white px-2 py-1 rounded">page.locator('button')</code> は別物として扱われます
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// フォルダ管理コンポーネント
+const FolderManager = ({
+  folders,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  folders: FolderType[]
+  onAdd: (folder: Omit<FolderType, "id" | "createdAt" | "updatedAt">) => void
+  onEdit: (id: string, folder: Omit<FolderType, "id" | "createdAt" | "updatedAt">) => void
+  onDelete: (id: string) => void
+}) => {
+  const [isAddingFolder, setIsAddingFolder] = useState(false)
+  const [editingFolder, setEditingFolder] = useState<FolderType | null>(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    color: "bg-blue-100",
+  })
+
+  const colorOptions = [
+    { value: "bg-blue-100", label: "青", class: "bg-blue-100" },
+    { value: "bg-green-100", label: "緑", class: "bg-green-100" },
+    { value: "bg-purple-100", label: "紫", class: "bg-purple-100" },
+    { value: "bg-red-100", label: "赤", class: "bg-red-100" },
+    { value: "bg-yellow-100", label: "黄", class: "bg-yellow-100" },
+    { value: "bg-pink-100", label: "ピンク", class: "bg-pink-100" },
+    { value: "bg-indigo-100", label: "藍", class: "bg-indigo-100" },
+    { value: "bg-gray-100", label: "グレー", class: "bg-gray-100" },
+  ]
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      description: "",
+      color: "bg-blue-100",
+    })
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (editingFolder) {
+      onEdit(editingFolder.id, formData)
+      setEditingFolder(null)
+    } else {
+      onAdd(formData)
+      setIsAddingFolder(false)
+    }
+    resetForm()
+  }
+
+  const startEdit = (folder: FolderType) => {
+    setEditingFolder(folder)
+    setFormData({
+      name: folder.name,
+      description: folder.description,
+      color: folder.color,
+    })
+    setIsAddingFolder(true)
+  }
+
+  if (isAddingFolder || editingFolder) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{editingFolder ? "フォルダを編集" : "新しいフォルダを追加"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="folderName">フォルダ名</Label>
+              <Input
+                id="folderName"
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="folderDescription">説明</Label>
+              <Textarea
+                id="folderDescription"
+                value={formData.description}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                className="h-20"
+              />
+            </div>
+
+            <div>
+              <Label>カラー</Label>
+              <div className="grid grid-cols-4 gap-2 mt-2">
+                {colorOptions.map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, color: color.value }))}
+                    className={`p-3 rounded border-2 ${color.class} ${
+                      formData.color === color.value ? "border-gray-800" : "border-gray-300"
+                    }`}
+                  >
+                    {color.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button type="submit">{editingFolder ? "更新" : "追加"}</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsAddingFolder(false)
+                  setEditingFolder(null)
+                  resetForm()
+                }}
+              >
+                キャンセル
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">フォルダ管理</h3>
+        <Button onClick={() => setIsAddingFolder(true)} size="sm">
+          <FolderPlus size={16} className="mr-2" />
+          フォルダを追加
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {folders
+          .filter((folder) => folder.id !== "default")
+          .map((folder) => (
+            <Card key={folder.id} className={`${folder.color} border-2`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Folder size={16} />
+                    <h4 className="font-medium">{folder.name}</h4>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => startEdit(folder)}>
+                      <Edit2 size={14} />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(folder.id)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600">{folder.description}</p>
+              </CardContent>
+            </Card>
+          ))}
+      </div>
+    </div>
+  )
+}
+
 // 問題管理コンポーネント
 const ProblemManager = ({
   problems,
+  folders,
   onAdd,
   onEdit,
   onDelete,
   onImport,
   onExport,
+  onNavigateToProblems,
 }: {
   problems: Problem[]
+  folders: FolderType[]
   onAdd: (problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => void
   onEdit: (id: string, problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => void
   onDelete: (id: string) => void
-  onImport: (problems: Problem[]) => void
-  onExport: () => void
+  onImport: (problems: Problem[], folderId?: string) => void
+  onExport: (folderId?: string) => void
+  onNavigateToProblems: () => void
 }) => {
   const [isAddingProblem, setIsAddingProblem] = useState(false)
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null)
   const [showExpectedCode, setShowExpectedCode] = useState<{ [key: string]: boolean }>({})
+  const [selectedFolder, setSelectedFolder] = useState<string>("all")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     title: "",
@@ -300,6 +694,7 @@ const ProblemManager = ({
     hints: [""],
     difficulty: 1,
     category: "",
+    folderId: "default",
   })
 
   const resetForm = () => {
@@ -311,6 +706,7 @@ const ProblemManager = ({
       hints: [""],
       difficulty: 1,
       category: "",
+      folderId: "default",
     })
   }
 
@@ -328,6 +724,8 @@ const ProblemManager = ({
     } else {
       onAdd(problemData)
       setIsAddingProblem(false)
+      // 問題追加後に問題一覧画面に遷移
+      onNavigateToProblems()
     }
     resetForm()
   }
@@ -343,6 +741,7 @@ const ProblemManager = ({
       hints: problem.hints.length > 0 ? problem.hints : [""],
       difficulty: problem.difficulty,
       category: problem.category,
+      folderId: problem.folderId,
     })
     setIsAddingProblem(true)
   }
@@ -397,25 +796,17 @@ const ProblemManager = ({
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string
-        const importedProblems = JSON.parse(content) as Problem[]
+        const importedData = JSON.parse(content)
 
-        if (
-          Array.isArray(importedProblems) &&
-          importedProblems.every(
-            (p) => p.title && p.description && p.expectedCode && Array.isArray(p.hints) && p.difficulty && p.category,
-          )
-        ) {
-          const processedProblems = importedProblems.map((p) => ({
-            ...p,
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }))
-
-          const success = onImport(processedProblems)
-          if (success) {
-            alert(`${processedProblems.length}個の問題をインポートしました！`)
-          }
+        // フォルダ指定でのインポートかどうかを確認
+        if (importedData.folder && importedData.problems) {
+          // フォルダ付きインポート
+          const folderId = selectedFolder === "all" ? "default" : selectedFolder
+          onImport(importedData.problems, folderId)
+        } else if (Array.isArray(importedData)) {
+          // 従来の問題のみのインポート
+          const folderId = selectedFolder === "all" ? "default" : selectedFolder
+          onImport(importedData, folderId)
         } else {
           alert("不正なファイル形式です。")
         }
@@ -428,6 +819,18 @@ const ProblemManager = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
+  }
+
+  const filteredProblems = selectedFolder === "all" ? problems : problems.filter((p) => p.folderId === selectedFolder)
+
+  const getFolderName = (folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId)
+    return folder ? folder.name : "未分類"
+  }
+
+  const getFolderColor = (folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId)
+    return folder ? folder.color : "bg-gray-100"
   }
 
   if (isAddingProblem || editingProblem) {
@@ -521,7 +924,7 @@ const ProblemManager = ({
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="difficulty">難易度</Label>
                 <Select
@@ -547,6 +950,24 @@ const ProblemManager = ({
                   onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
                   required
                 />
+              </div>
+              <div>
+                <Label htmlFor="folder">フォルダ</Label>
+                <Select
+                  value={formData.folderId}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, folderId: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {folders.map((folder) => (
+                      <SelectItem key={folder.id} value={folder.id}>
+                        {folder.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -576,7 +997,20 @@ const ProblemManager = ({
         <div className="flex items-center justify-between">
           <CardTitle>問題管理</CardTitle>
           <div className="flex gap-2">
-            <Button onClick={onExport} variant="outline">
+            <Select value={selectedFolder} onValueChange={setSelectedFolder}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全てのフォルダ</SelectItem>
+                {folders.map((folder) => (
+                  <SelectItem key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={() => onExport(selectedFolder === "all" ? undefined : selectedFolder)} variant="outline">
               <Upload size={16} className="mr-2" />
               エクスポート
             </Button>
@@ -597,6 +1031,7 @@ const ProblemManager = ({
           <table className="w-full text-sm text-left text-gray-500">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50">
               <tr>
+                <th className="px-4 py-3">フォルダ</th>
                 <th className="px-4 py-3">タイトル</th>
                 <th className="px-4 py-3">カテゴリ</th>
                 <th className="px-4 py-3">難易度</th>
@@ -605,8 +1040,13 @@ const ProblemManager = ({
               </tr>
             </thead>
             <tbody>
-              {problems.map((problem) => (
+              {filteredProblems.map((problem) => (
                 <tr key={problem.id} className="bg-white border-b">
+                  <td className="px-4 py-4">
+                    <span className={`px-2 py-1 rounded text-xs ${getFolderColor(problem.folderId)}`}>
+                      {getFolderName(problem.folderId)}
+                    </span>
+                  </td>
                   <td className="px-4 py-4 font-medium text-gray-900">{problem.title}</td>
                   <td className="px-4 py-4">{problem.category}</td>
                   <td className="px-4 py-4">
@@ -675,6 +1115,7 @@ const loadProblems = (): Problem[] => {
           ...problem,
           createdAt: new Date(problem.createdAt),
           updatedAt: new Date(problem.updatedAt),
+          folderId: problem.folderId || "default", // 既存データの互換性のため
         }))
       }
     } catch (error) {
@@ -684,6 +1125,51 @@ const loadProblems = (): Problem[] => {
 
   // デフォルト値（サンプル問題）
   return sampleProblems
+}
+
+// フォルダデータを読み込む関数を追加
+const loadFolders = (): FolderType[] => {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("playwright-learning-folders")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // 日付オブジェクトを復元
+        const folders = parsed.map((folder: any) => ({
+          ...folder,
+          createdAt: new Date(folder.createdAt),
+          updatedAt: new Date(folder.updatedAt),
+        }))
+        // デフォルトフォルダが存在しない場合は追加
+        if (!folders.find((f: FolderType) => f.id === "default")) {
+          folders.unshift(defaultFolder)
+        }
+        return folders
+      }
+    } catch (error) {
+      console.error("Failed to load folders from localStorage:", error)
+    }
+  }
+
+  // デフォルト値（サンプルフォルダ）
+  return sampleFolders
+}
+
+// 設定データを読み込む関数を追加
+const loadSettings = (): AppSettings => {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("playwright-learning-settings")
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (error) {
+      console.error("Failed to load settings from localStorage:", error)
+    }
+  }
+
+  // デフォルト値
+  return defaultSettings
 }
 
 // モバイル端末検出用のhook
@@ -707,16 +1193,29 @@ const useIsMobile = () => {
   return isMobile
 }
 
+// クォート正規化関数
+const normalizeQuotes = (code: string): string => {
+  // シングルクォートをダブルクォートに統一
+  return code.replace(/'/g, '"')
+}
+
 // メインアプリケーション
 export default function PlaywrightLearningApp() {
-  const [currentView, setCurrentView] = useState<"dashboard" | "learning" | "problems" | "manual">("dashboard")
-  // const [problems, setProblems] = useState<Problem[]>(sampleProblems) を以下に変更
+  const [currentView, setCurrentView] = useState<"dashboard" | "learning" | "problems" | "manual" | "settings">(
+    "dashboard",
+  )
   const [problems, setProblems] = useState<Problem[]>(loadProblems)
+  const [folders, setFolders] = useState<FolderType[]>(loadFolders)
+  const [settings, setSettings] = useState<AppSettings>(loadSettings)
   const [currentSession, setCurrentSession] = useState<LearningSession | null>(null)
   const [userCode, setUserCode] = useState("")
   const [currentHintIndex, setCurrentHintIndex] = useState(-1)
   const [showAnswer, setShowAnswer] = useState(false)
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "hint"; message: string } | null>(null)
+
+  // 解答比較用の状態を追加
+  const [showComparison, setShowComparison] = useState(false)
+  const [userAnswerForComparison, setUserAnswerForComparison] = useState("")
 
   // ローカルストレージから進捗データを復元する関数
   const loadUserProgress = (): UserProgress => {
@@ -752,57 +1251,51 @@ export default function PlaywrightLearningApp() {
   const isMobile = useIsMobile()
 
   // 出題方法の設定を管理
-  // 出題方法の設定を管理（localStorageから読み込まない）
   const [questionOrder, setQuestionOrder] = useState<QuestionOrder["type"]>("unlearned-first")
   const [showQuestionOrderModal, setShowQuestionOrderModal] = useState(false)
-
-  // 出題方法をlocalStorageに保存
-  // この部分を削除
-  // useEffect(() => {
-  //   if (typeof window !== "undefined") {
-  //     try {
-  //       localStorage.setItem("playwright-learning-question-order", questionOrder)
-  //     } catch (error) {
-  //       console.error("Failed to save question order to localStorage:", error)
-  //     }
-  //   }
-  // }, [questionOrder])
+  const [showFolderSelectionModal, setShowFolderSelectionModal] = useState(false)
+  const [selectedFolders, setSelectedFolders] = useState<string[]>([])
 
   // 問題を選択する関数を追加
   const selectProblemsForSession = (
     orderType: QuestionOrder["type"],
     allProblems: Problem[],
     solvedProblems: string[],
+    folderIds: string[],
   ): Problem[] => {
+    // フォルダでフィルタリング
+    const filteredProblems =
+      folderIds.length === 0 ? allProblems : allProblems.filter((p) => folderIds.includes(p.folderId))
+
     let sortedProblems: Problem[] = []
 
     switch (orderType) {
       case "random":
-        sortedProblems = [...allProblems].sort(() => Math.random() - 0.5)
+        sortedProblems = [...filteredProblems].sort(() => Math.random() - 0.5)
         break
 
       case "unlearned-first":
-        const unlearned = allProblems.filter((p) => !solvedProblems.includes(p.id))
-        const learned = allProblems.filter((p) => solvedProblems.includes(p.id))
+        const unlearned = filteredProblems.filter((p) => !solvedProblems.includes(p.id))
+        const learned = filteredProblems.filter((p) => solvedProblems.includes(p.id))
         sortedProblems = [...unlearned, ...learned]
         break
 
       case "learned-first":
-        const learnedFirst = allProblems.filter((p) => solvedProblems.includes(p.id))
-        const unlearnedLast = allProblems.filter((p) => !solvedProblems.includes(p.id))
+        const learnedFirst = filteredProblems.filter((p) => solvedProblems.includes(p.id))
+        const unlearnedLast = filteredProblems.filter((p) => !solvedProblems.includes(p.id))
         sortedProblems = [...learnedFirst, ...unlearnedLast]
         break
 
       case "easy-first":
-        sortedProblems = [...allProblems].sort((a, b) => a.difficulty - b.difficulty)
+        sortedProblems = [...filteredProblems].sort((a, b) => a.difficulty - b.difficulty)
         break
 
       case "hard-first":
-        sortedProblems = [...allProblems].sort((a, b) => b.difficulty - a.difficulty)
+        sortedProblems = [...filteredProblems].sort((a, b) => b.difficulty - a.difficulty)
         break
 
       default:
-        sortedProblems = allProblems
+        sortedProblems = filteredProblems
     }
 
     return sortedProblems.slice(0, 5) // 最初の5問を選択
@@ -821,7 +1314,7 @@ export default function PlaywrightLearningApp() {
     }
   }, [userProgress])
 
-  // 進捗データをlocalStorageに保存するuseEffectの後に、問題データ保存用のuseEffectを追加
+  // 問題データ保存用のuseEffect
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -832,12 +1325,50 @@ export default function PlaywrightLearningApp() {
     }
   }, [problems])
 
+  // フォルダデータ保存用のuseEffect
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("playwright-learning-folders", JSON.stringify(folders))
+      } catch (error) {
+        console.error("Failed to save folders to localStorage:", error)
+      }
+    }
+  }, [folders])
+
+  // 設定データ保存用のuseEffect
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("playwright-learning-settings", JSON.stringify(settings))
+      } catch (error) {
+        console.error("Failed to save settings to localStorage:", error)
+      }
+    }
+  }, [settings])
+
   const startNewSession = () => {
+    setShowFolderSelectionModal(true)
+  }
+
+  const startFolderSelection = () => {
+    setSelectedFolders([])
+    setShowFolderSelectionModal(true)
+  }
+
+  const startSessionWithFolders = () => {
+    setShowFolderSelectionModal(false)
     setShowQuestionOrderModal(true)
   }
 
   const startSessionWithOrder = (orderType: QuestionOrder["type"]) => {
-    const sessionProblems = selectProblemsForSession(orderType, problems, userProgress.solvedProblems)
+    const sessionProblems = selectProblemsForSession(orderType, problems, userProgress.solvedProblems, selectedFolders)
+
+    if (sessionProblems.length === 0) {
+      alert("選択したフォルダに問題がありません。")
+      return
+    }
+
     setCurrentSession({
       sessionId: Date.now().toString(),
       problems: sessionProblems,
@@ -845,11 +1376,14 @@ export default function PlaywrightLearningApp() {
       startedAt: new Date(),
       isCompleted: false,
       answersShown: new Set(),
+      selectedFolders: selectedFolders,
     })
     setUserCode("")
     setCurrentHintIndex(-1)
     setShowAnswer(false)
     setFeedback(null)
+    setShowComparison(false)
+    setUserAnswerForComparison("")
     setShowQuestionOrderModal(false)
     setCurrentView("learning")
   }
@@ -858,11 +1392,24 @@ export default function PlaywrightLearningApp() {
     if (!currentSession) return
 
     const currentProblem = currentSession.problems[currentSession.currentProblemIndex]
-    const normalizedUserCode = userCode.trim().replace(/\s+/g, " ")
+    let normalizedUserCode = userCode
 
     const allAnswers = [currentProblem.expectedCode, ...(currentProblem.alternativeAnswers || [])]
 
-    const isCorrect = allAnswers.some((answer) => normalizedUserCode === answer.trim().replace(/\s+/g, " "))
+    // 設定に応じて正規化を適用
+    let normalizedAnswers = allAnswers
+
+    if (settings.normalizeSpaces) {
+      normalizedUserCode = normalizedUserCode.trim().replace(/\s+/g, " ")
+      normalizedAnswers = allAnswers.map((answer) => answer.trim().replace(/\s+/g, " "))
+    }
+
+    if (settings.normalizeQuotes) {
+      normalizedUserCode = normalizeQuotes(normalizedUserCode)
+      normalizedAnswers = normalizedAnswers.map((answer) => normalizeQuotes(answer))
+    }
+
+    const isCorrect = normalizedAnswers.some((answer) => normalizedUserCode === answer)
 
     if (isCorrect) {
       setFeedback({ type: "success", message: "正解です！素晴らしい！" })
@@ -910,6 +1457,8 @@ export default function PlaywrightLearningApp() {
           setCurrentHintIndex(-1)
           setShowAnswer(false)
           setFeedback(null)
+          setShowComparison(false)
+          setUserAnswerForComparison("")
         } else {
           setCurrentSession((prev) => (prev ? { ...prev, isCompleted: true } : null))
           setFeedback({ type: "success", message: "セッション完了！お疲れ様でした！" })
@@ -924,9 +1473,12 @@ export default function PlaywrightLearningApp() {
     if (!currentSession) return
 
     const currentProblem = currentSession.problems[currentSession.currentProblemIndex]
-    setUserCode(currentProblem.expectedCode)
+
+    // ユーザーの解答を保存して比較表示
+    setUserAnswerForComparison(userCode)
+    setShowComparison(true)
     setShowAnswer(true)
-    setFeedback({ type: "hint", message: "正解を表示しました。コードを確認して学習しましょう！" })
+    setFeedback({ type: "hint", message: "解答比較を表示しました。違いを確認して学習しましょう！" })
 
     setCurrentSession((prev) =>
       prev
@@ -936,6 +1488,12 @@ export default function PlaywrightLearningApp() {
           }
         : null,
     )
+  }
+
+  const closeComparison = () => {
+    setShowComparison(false)
+    setUserAnswerForComparison("")
+    setShowAnswer(false) // この行を追加
   }
 
   const showHint = () => {
@@ -958,9 +1516,11 @@ export default function PlaywrightLearningApp() {
     setCurrentHintIndex(-1)
     setShowAnswer(false)
     setFeedback(null)
+    setShowComparison(false)
+    setUserAnswerForComparison("")
   }
 
-  // resetProgress関数の後に、進捗リセット用のヘルパー関数を追加
+  // 進捗リセット用のヘルパー関数
   const resetProgressData = () => {
     setUserProgress((prev) => ({
       ...prev,
@@ -971,7 +1531,47 @@ export default function PlaywrightLearningApp() {
     }))
   }
 
-  // addProblem関数を以下のように変更
+  // フォルダ管理関数
+  const addFolder = (folderData: Omit<FolderType, "id" | "createdAt" | "updatedAt">) => {
+    const newFolder: FolderType = {
+      ...folderData,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    setFolders((prev) => [...prev, newFolder])
+  }
+
+  const editFolder = (id: string, folderData: Omit<FolderType, "id" | "createdAt" | "updatedAt">) => {
+    setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, ...folderData, updatedAt: new Date() } : f)))
+  }
+
+  const deleteFolder = (id: string) => {
+    if (id === "default") {
+      alert("デフォルトフォルダは削除できません。")
+      return
+    }
+
+    const problemsInFolder = problems.filter((p) => p.folderId === id)
+    if (problemsInFolder.length > 0) {
+      if (
+        confirm(
+          `このフォルダには${problemsInFolder.length}個の問題があります。フォルダを削除すると、これらの問題は「未分類」フォルダに移動されます。続行しますか？`,
+        )
+      ) {
+        // 問題を未分類フォルダに移動
+        setProblems((prev) => prev.map((p) => (p.folderId === id ? { ...p, folderId: "default" } : p)))
+        // フォルダを削除
+        setFolders((prev) => prev.filter((f) => f.id !== id))
+      }
+    } else {
+      if (confirm("このフォルダを削除しますか？")) {
+        setFolders((prev) => prev.filter((f) => f.id !== id))
+      }
+    }
+  }
+
+  // 問題管理関数
   const addProblem = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
     if (
       confirm(
@@ -990,22 +1590,29 @@ export default function PlaywrightLearningApp() {
     }
   }
 
-  // importProblems関数の確認メッセージを変更
-  const importProblems = (importedProblems: Problem[]): boolean => {
+  const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {
+    const targetFolderId = folderId || "default"
+    const processedProblems = importedProblems.map((p) => ({
+      ...p,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      folderId: targetFolderId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }))
+
     if (
       confirm(
-        `${importedProblems.length}個の問題をインポートすると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？`,
+        `${processedProblems.length}個の問題をインポートすると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？`,
       )
     ) {
-      setProblems((prev) => [...prev, ...importedProblems])
+      setProblems((prev) => [...prev, ...processedProblems])
       resetProgressData()
-      alert(`${importedProblems.length}個の問題をインポートし、進捗率とレベルをリセットしました。`)
+      alert(`${processedProblems.length}個の問題をインポートし、進捗率とレベルをリセットしました。`)
       return true
     }
     return false
   }
 
-  // deleteProblem関数の確認メッセージを変更
   const deleteProblem = (id: string) => {
     if (
       confirm(
@@ -1018,14 +1625,25 @@ export default function PlaywrightLearningApp() {
     }
   }
 
-  const exportProblems = () => {
-    const dataStr = JSON.stringify(problems, null, 2)
+  const exportProblems = (folderId?: string) => {
+    const exportData = folderId
+      ? {
+          folder: folders.find((f) => f.id === folderId),
+          problems: problems.filter((p) => p.folderId === folderId),
+        }
+      : {
+          folders: folders,
+          problems: problems,
+        }
+
+    const dataStr = JSON.stringify(exportData, null, 2)
     const dataBlob = new Blob([dataStr], { type: "application/json" })
     const url = URL.createObjectURL(dataBlob)
 
     const link = document.createElement("a")
     link.href = url
-    link.download = `playwright-problems-${new Date().toISOString().split("T")[0]}.json`
+    const folderName = folderId ? folders.find((f) => f.id === folderId)?.name || "unknown" : "all"
+    link.download = `playwright-problems-${folderName}-${new Date().toISOString().split("T")[0]}.json`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -1051,6 +1669,10 @@ export default function PlaywrightLearningApp() {
 
   const editProblem = (id: string, problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
     setProblems((prev) => prev.map((p) => (p.id === id ? { ...p, ...problem, updatedAt: new Date() } : p)))
+  }
+
+  const updateSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings)
   }
 
   // モバイル端末の場合は警告画面を表示
@@ -1108,6 +1730,13 @@ export default function PlaywrightLearningApp() {
                 >
                   <Settings size={16} className="mr-2" />
                   問題管理
+                </Button>
+                <Button
+                  variant={currentView === "settings" ? "default" : "ghost"}
+                  onClick={() => setCurrentView("settings")}
+                >
+                  <Cog size={16} className="mr-2" />
+                  設定
                 </Button>
                 <Button
                   variant={currentView === "manual" ? "default" : "ghost"}
@@ -1181,28 +1810,6 @@ export default function PlaywrightLearningApp() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* 学習統計の後に進捗リセットセクションを追加 */}
-            {/*
-            <Card>
-              <CardHeader>
-                <CardTitle>学習データ管理</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <Label>学習進捗のリセット</Label>
-                    <p className="text-sm text-gray-600 mb-3">
-                      解答済み問題、レベル、学習カレンダーなど全ての学習データをリセットします。
-                    </p>
-                    <Button onClick={resetProgress} variant="destructive">
-                      学習進捗をリセット
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            */}
 
             {/* キャラクター表示 */}
             <Card>
@@ -1295,15 +1902,14 @@ export default function PlaywrightLearningApp() {
                     </Button>
                   )}
 
-                  {currentHintIndex >= currentSession.problems[currentSession.currentProblemIndex].hints.length - 1 &&
-                    !showAnswer && (
-                      <Button onClick={showCorrectAnswer} variant="destructive" size="sm">
-                        解答を見る
-                      </Button>
-                    )}
+                  {currentHintIndex >= currentSession.problems[currentSession.currentProblemIndex].hints.length - 1 && (
+                    <Button onClick={showCorrectAnswer} variant="destructive" size="sm">
+                      {showAnswer ? "解答を再表示" : "解答を見る"}
+                    </Button>
+                  )}
 
-                  {showAnswer && (
-                    <div className="bg-orange-100 text-orange-800 px-4 py-2 rounded text-sm">解答を表示中です</div>
+                  {showComparison && (
+                    <div className="bg-orange-100 text-orange-800 px-4 py-2 rounded text-sm">解答比較を表示中です</div>
                   )}
                 </div>
               </CardContent>
@@ -1335,14 +1941,25 @@ export default function PlaywrightLearningApp() {
         )}
 
         {currentView === "problems" && (
-          <ProblemManager
-            problems={problems}
-            onAdd={addProblem}
-            onEdit={editProblem}
-            onDelete={deleteProblem}
-            onImport={importProblems}
-            onExport={exportProblems}
-          />
+          <div className="space-y-8">
+            <FolderManager folders={folders} onAdd={addFolder} onEdit={editFolder} onDelete={deleteFolder} />
+            <ProblemManager
+              problems={problems}
+              folders={folders}
+              onAdd={addProblem}
+              onEdit={editProblem}
+              onDelete={deleteProblem}
+              onImport={importProblems}
+              onExport={exportProblems}
+              onNavigateToProblems={() => setCurrentView("problems")}
+            />
+          </div>
+        )}
+
+        {currentView === "settings" && (
+          <div className="space-y-8">
+            <SettingsManager settings={settings} onUpdate={updateSettings} />
+          </div>
         )}
 
         {currentView === "manual" && (
@@ -1360,6 +1977,60 @@ export default function PlaywrightLearningApp() {
               </CardContent>
             </Card>
 
+            {/* フォルダ機能 */}
+            <Card>
+              <CardHeader>
+                <CardTitle>📁 フォルダ機能</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">🗂️ 問題の分類</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• 問題をフォルダごとに分類して管理できます</li>
+                    <li>• 学習セッション開始時に特定のフォルダを選択可能</li>
+                    <li>• フォルダごとに色分けして視覚的に管理</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2">📤 フォルダ別エクスポート・インポート</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• 特定のフォルダの問題のみをエクスポート可能</li>
+                    <li>• インポート時にフォルダを指定して問題を追加</li>
+                    <li>• フォルダ情報も含めてデータを共有</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 設定機能 */}
+            <Card>
+              <CardHeader>
+                <CardTitle>⚙️ 設定機能</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">🔤 クォート正規化設定</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• シングルクォート（'）とダブルクォート（"）の扱いを設定可能</li>
+                    <li>• 正規化ON: 'button' と "button" を同じとして扱う</li>
+                    <li>• 正規化OFF: 'button' と "button" を別物として扱う</li>
+                    <li>• デフォルトは正規化ONで、より柔軟な学習が可能</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2">🔲 空欄正規化設定</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• 空欄（スペース）の扱いを設定可能</li>
+                    <li>• 正規化ON: 複数の空欄を1つにまとめ、前後の空欄を削除</li>
+                    <li>• 正規化OFF: 空欄も含めて完全一致を要求</li>
+                    <li>• デフォルトは正規化ONで、より学習しやすい設定</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* データ管理 */}
             <Card>
               <CardHeader>
@@ -1371,9 +2042,11 @@ export default function PlaywrightLearningApp() {
                   <div className="bg-green-50 p-3 rounded mb-3">
                     <p className="text-green-700 mb-2">以下のデータがブラウザに自動保存されます：</p>
                     <ul className="text-green-600 space-y-1">
+                      <li>• フォルダデータ（作成したフォルダ情報）</li>
                       <li>• 問題データ（追加・編集した問題）</li>
                       <li>• 学習進捗（解答済み問題、レベル）</li>
                       <li>• 学習カレンダー（日別活動記録）</li>
+                      <li>• アプリケーション設定（クォート正規化など）</li>
                     </ul>
                   </div>
                 </div>
@@ -1452,6 +2125,9 @@ export default function PlaywrightLearningApp() {
                     <h4 className="font-medium text-orange-800 mb-2">📊 容量の目安</h4>
                     <ul className="text-orange-700 text-sm space-y-1">
                       <li>
+                        • <strong>フォルダデータ</strong>: 1フォルダあたり約0.5KB
+                      </li>
+                      <li>
                         • <strong>問題データ</strong>: 1問あたり約1-2KB（100問で約100-200KB）
                       </li>
                       <li>
@@ -1496,6 +2172,21 @@ export default function PlaywrightLearningApp() {
                     </div>
 
                     <div className="border-l-4 border-blue-500 pl-3">
+                      <h4 className="font-medium">Q: フォルダを削除したら問題はどうなりますか？</h4>
+                      <p className="text-gray-600 text-sm">
+                        A: フォルダ内の問題は「未分類」フォルダに自動的に移動されます。問題自体は削除されません。
+                      </p>
+                    </div>
+
+                    <div className="border-l-4 border-blue-500 pl-3">
+                      <h4 className="font-medium">Q: クォート正規化とは何ですか？</h4>
+                      <p className="text-gray-600 text-sm">
+                        A:
+                        シングルクォート（'）とダブルクォート（"）を同じものとして扱うかどうかの設定です。ONにすると、より柔軟な回答判定が可能になります。
+                      </p>
+                    </div>
+
+                    <div className="border-l-4 border-blue-500 pl-3">
                       <h4 className="font-medium">Q: レベルが上がりません</h4>
                       <p className="text-gray-600 text-sm">
                         A: 解答を見た問題は進捗にカウントされません。ヒントを使わずに正解することでレベルアップします。
@@ -1508,7 +2199,80 @@ export default function PlaywrightLearningApp() {
                         A: エクスポート機能でデータをファイルに保存し、他のデバイスでインポートしてください。
                       </p>
                     </div>
+
+                    <div className="border-l-4 border-blue-500 pl-3">
+                      <h4 className="font-medium">Q: 空欄正規化とは何ですか？</h4>
+                      <p className="text-gray-600 text-sm">
+                        A:
+                        複数の空欄を1つにまとめ、前後の空欄を削除するかどうかの設定です。ONにすると、空欄の違いを気にせずに学習できます。
+                      </p>
+                    </div>
+
+                    <div className="border-l-4 border-blue-500 pl-3">
+                      <h4 className="font-medium">Q: 解答比較画面とは何ですか？</h4>
+                      <p className="text-gray-600 text-sm">
+                        A:
+                        「解答を見る」ボタンを押すと、あなたの解答と正解を並べて比較できる画面が表示されます。違いを確認して学習に役立ててください。
+                      </p>
+                    </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* 解答比較モーダル */}
+        {showComparison && currentSession && (
+          <AnswerComparison
+            userAnswer={userAnswerForComparison}
+            correctAnswer={currentSession.problems[currentSession.currentProblemIndex].expectedCode}
+            onClose={closeComparison}
+          />
+        )}
+
+        {/* フォルダ選択モーダル */}
+        {showFolderSelectionModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>学習するフォルダを選択</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {folders.map((folder) => (
+                    <div key={folder.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={folder.id}
+                        checked={selectedFolders.includes(folder.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedFolders((prev) => [...prev, folder.id])
+                          } else {
+                            setSelectedFolders((prev) => prev.filter((id) => id !== folder.id))
+                          }
+                        }}
+                      />
+                      <label htmlFor={folder.id} className={`flex-1 p-2 rounded cursor-pointer ${folder.color}`}>
+                        <div className="flex items-center gap-2">
+                          <Folder size={16} />
+                          <span className="font-medium">{folder.name}</span>
+                          <span className="text-sm text-gray-600">
+                            ({problems.filter((p) => p.folderId === folder.id).length}問)
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">{folder.description}</p>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Button onClick={startSessionWithFolders} disabled={selectedFolders.length === 0} className="flex-1">
+                    選択完了 ({selectedFolders.length}フォルダ)
+                  </Button>
+                  <Button onClick={() => setShowFolderSelectionModal(false)} variant="ghost">
+                    キャンセル
+                  </Button>
                 </div>
               </CardContent>
             </Card>
