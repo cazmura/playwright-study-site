@@ -90,6 +90,7 @@ const questionOrderOptions: QuestionOrder[] = [
   { type: "random", label: "ランダム" },
   { type: "unlearned-first", label: "未学習から優先" },
   { type: "learned-first", label: "学習済みから優先" },
+  { type: "easy-first", label: "学習済みから優先" },
   { type: "easy-first", label: "難易度が低いものから優先" },
   { type: "hard-first", label: "難易度が高いものから優先" },
 ]
@@ -442,7 +443,7 @@ const SettingsManager = ({
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <Label htmlFor="normalize-spaces">空欄正規化</Label>
-              <p className="text-sm text-gray-600">複数の空欄を1つにまとめ、前後の空欄を削除します</p>
+              <p className="text-sm text-gray-600">すべての空白文字（スペース、タブ、改行）を削除して比較します</p>
             </div>
             <Switch
               id="normalize-spaces"
@@ -891,29 +892,6 @@ const ProblemManager = ({
                       variant="destructive"
                       size="sm"
                     >
-                      削除
-                    </Button>
-                  )}
-                </div>
-              ))}
-              <Button type="button" onClick={addAlternativeAnswer} variant="outline" size="sm">
-                代替解答を追加
-              </Button>
-            </div>
-
-            <div>
-              <Label>ヒント</Label>
-              {formData.hints.map((hint, index) => (
-                <div key={index} className="flex gap-2 mb-2">
-                  <Input
-                    type="text"
-                    value={hint}
-                    onChange={(e) => updateHint(index, e.target.value)}
-                    placeholder={`ヒント ${index + 1}`}
-                    className="flex-1"
-                  />
-                  {formData.hints.length > 1 && (
-                    <Button type="button" onClick={() => removeHint(index)} variant="destructive" size="sm">
                       削除
                     </Button>
                   )}
@@ -1400,8 +1378,8 @@ export default function PlaywrightLearningApp() {
     let normalizedAnswers = allAnswers
 
     if (settings.normalizeSpaces) {
-      normalizedUserCode = normalizedUserCode.trim().replace(/\s+/g, " ")
-      normalizedAnswers = allAnswers.map((answer) => answer.trim().replace(/\s+/g, " "))
+      normalizedUserCode = normalizedUserCode.replace(/\s+/g, "")
+      normalizedAnswers = allAnswers.map((answer) => answer.replace(/\s+/g, ""))
     }
 
     if (settings.normalizeQuotes) {
