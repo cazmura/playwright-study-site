@@ -329,8 +329,14 @@ const CodeEditor = ({
       <Textarea
         value={code}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            onRun();
+          }
+        }}
         className="w-full h-64 p-4 bg-gray-900 text-gray-100 font-mono text-sm resize-none border-0 rounded-none"
-        placeholder="ここにPlaywrightコードを入力してください..."
+        placeholder="ここにPlaywrightコードを入力してください... (Cmd+Enter で実行)"
         spellCheck={false}
       />
     </div>

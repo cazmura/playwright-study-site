@@ -13,7 +13,7 @@ test.describe('Problem registration', () => {
   test('register a new problem via Problem Manager', async ({ page }) => {
     const uniqueTitle = `E2E 登録テスト ${Date.now()}`;
 
-    await page.goto('http://localhost:3000');
+    await page.goto('https://playwright-study-site.vercel.app/');
     await page.waitForLoadState('networkidle');
 
     // Header visible
