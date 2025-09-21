@@ -159,6 +159,9 @@ importers:
         specifier: ^3.24.1
         version: 3.24.1
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.47.0
+        version: 1.54.2
       '@types/node':
         specifier: ^22
         version: 22.0.0
@@ -2055,7 +2058,6 @@ snapshots:
   '@playwright/test@1.54.2':
     dependencies:
       playwright: 1.54.2
-    optional: true
 
   '@radix-ui/number@1.1.1': {}
 
@@ -3180,15 +3182,13 @@ snapshots:
 
   pirates@4.0.7: {}
 
-  playwright-core@1.54.2:
-    optional: true
+  playwright-core@1.54.2: {}
 
   playwright@1.54.2:
     dependencies:
       playwright-core: 1.54.2
     optionalDependencies:
       fsevents: 2.3.2
-    optional: true
 
   postcss-import@15.1.0(postcss@8.5.0):
     dependencies:
