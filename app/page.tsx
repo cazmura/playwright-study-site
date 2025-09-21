@@ -336,7 +336,7 @@ const CodeEditor = ({
           }
         }}
         className="w-full h-64 p-4 bg-gray-900 text-gray-100 font-mono text-sm resize-none border-0 rounded-none"
-        placeholder="ここにPlaywrightコードを入力してください... (Cmd+Enter で実行)"
+        placeholder="ここにPlaywrightコードを入力してください... (Cmd+Enter で実行可能)"
         spellCheck={false}
       />
     </div>
