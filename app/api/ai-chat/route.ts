@@ -106,8 +106,8 @@ expectedCodeには、実際に動作するPlaywrightのコードを記述して�
                   },
                   folderId: {
                     type: "string",
-                    description: "フォルダID",
-                    default: "default",
+                    description: "フォルダID（AI生成問題は自動的にai-generatedフォルダに格納されます）",
+                    default: "ai-generated",
                   },
                 },
                 required: [

@@ -93,10 +93,7 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
       if (data.toolCall && data.toolCall.name === "createProblem") {
         console.log("[v0] Creating problem:", data.toolCall.parameters)
         try {
-          onProblemGenerated({
-            ...data.toolCall.parameters,
-            folderId: data.toolCall.parameters.folderId || "default",
-          })
+          onProblemGenerated(data.toolCall.parameters)
         } catch (err) {
           console.error("[v0] Failed to create problem:", err)
           setError("問題の作成に失敗しました")

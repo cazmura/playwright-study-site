@@ -111,9 +111,20 @@ const defaultFolder: FolderType = {
   updatedAt: new Date(),
 }
 
+// AI生成問題用フォルダ（削除不可）
+const aiGeneratedFolder: FolderType = {
+  id: "ai-generated",
+  name: "AI生成問題",
+  description: "AIによって自動生成された問題",
+  color: "bg-green-100",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+}
+
 // サンプルフォルダデータ
 const sampleFolders: FolderType[] = [
   defaultFolder,
+  aiGeneratedFolder,
   {
     id: "basic",
     name: "基本操作",
@@ -1167,6 +1178,10 @@ const loadFolders = (): FolderType[] => {
         if (!folders.find((f: FolderType) => f.id === "default")) {
           folders.unshift(defaultFolder)
         }
+        // AI生成フォルダが存在しない場合は追加
+        if (!folders.find((f: FolderType) => f.id === "ai-generated")) {
+          folders.splice(1, 0, aiGeneratedFolder)
+        }
         return folders
       }
     } catch (error) {
@@ -1593,6 +1608,11 @@ export default function PlaywrightLearningApp() {
       return
     }
 
+    if (id === "ai-generated") {
+      alert("AI生成問題フォルダは削除できません。")
+      return
+    }
+
     const problemsInFolder = problems.filter((p) => p.folderId === id)
     if (problemsInFolder.length > 0) {
       if (
@@ -1643,6 +1663,7 @@ export default function PlaywrightLearningApp() {
     const newProblem: Problem = {
       ...problemData,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Generate a more unique ID
+      folderId: "ai-generated", // AI生成問題は必ずai-generatedフォルダに格納
       createdAt: new Date(),
       updatedAt: new Date(),
     }
