@@ -1,8 +1,28 @@
-import { streamText, tool } from "ai"
-import { openai } from "@ai-sdk/openai"
-import { z } from "zod"
-
 export const maxDuration = 30
+
+interface Message {
+  role: "user" | "assistant" | "system"
+  content: string
+}
+
+interface OpenAIResponse {
+  id: string
+  choices: Array<{
+    message: {
+      role: string
+      content: string
+      tool_calls?: Array<{
+        id: string
+        type: string
+        function: {
+          name: string
+          arguments: string
+        }
+      }>
+    }
+    finish_reason: string
+  }>
+}
 
 export async function POST(req: Request) {
   try {
@@ -10,10 +30,22 @@ export async function POST(req: Request) {
 
     console.log("[v0] AI Chat - Received messages:", messages.length)
 
-    const result = streamText({
-      model: openai("gpt-4o-mini"),
-      messages,
-      system: `あなたはPlaywrightの学習支援AIです。ユーザーの要望を聞いて、適切な学習問題を作成します。
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not set")
+    }
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `あなたはPlaywrightの学習支援AIです。ユーザーの要望を聞いて、適切な学習問題を作成します。
 
 ユーザーが学びたい内容を理解したら、createProblemツールを使用して問題を作成してください。
 
@@ -26,36 +58,118 @@ expectedCodeには、実際に動作するPlaywrightのコードを記述して�
 - 「要素の取得方法を教えて」→ 要素を取得する練習問題を作成
 
 問題を作成する際は、必ずcreateProblemツールを呼び出してください。`,
-      temperature: 0.7,
-      maxTokens: 2000,
-      tools: {
-        createProblem: tool({
-          description: "Playwrightの学習問題を作成して登録します",
-          parameters: z.object({
-            title: z.string().describe("問題のタイトル"),
-            description: z.string().describe("問題の説明（何をするべきか明確に記述）"),
-            expectedCode: z.string().describe("期待される回答コード（Playwrightのコード）"),
-            alternativeAnswers: z.array(z.string()).describe("代替解答のリスト"),
-            hints: z.array(z.string()).describe("ヒントのリスト"),
-            difficulty: z.number().min(1).max(3).describe("難易度（1: 初級, 2: 中級, 3: 上級）"),
-            category: z.string().describe("カテゴリ名（例: 基本操作、要素の取得、フォーム入力など）"),
-            folderId: z.string().default("default").describe("フォルダID"),
-          }),
-          execute: async (params) => {
-            console.log("[v0] AI Chat - Creating problem:", params.title)
-            // ツールの実行結果を返す（クライアント側で実際の登録処理を行う）
-            return {
-              success: true,
-              message: `問題「${params.title}」を作成しました。`,
-              problem: params,
-            }
           },
-        }),
-      },
+          ...messages,
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "createProblem",
+              description: "Playwrightの学習問題を作成して登録します",
+              parameters: {
+                type: "object",
+                properties: {
+                  title: {
+                    type: "string",
+                    description: "問題のタイトル",
+                  },
+                  description: {
+                    type: "string",
+                    description: "問題の説明（何をするべきか明確に記述）",
+                  },
+                  expectedCode: {
+                    type: "string",
+                    description: "期待される回答コード（Playwrightのコード）",
+                  },
+                  alternativeAnswers: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "代替解答のリスト",
+                  },
+                  hints: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "ヒントのリスト",
+                  },
+                  difficulty: {
+                    type: "number",
+                    minimum: 1,
+                    maximum: 3,
+                    description: "難易度（1: 初級, 2: 中級, 3: 上級）",
+                  },
+                  category: {
+                    type: "string",
+                    description: "カテゴリ名（例: 基本操作、要素の取得、フォーム入力など）",
+                  },
+                  folderId: {
+                    type: "string",
+                    description: "フォルダID",
+                    default: "default",
+                  },
+                },
+                required: [
+                  "title",
+                  "description",
+                  "expectedCode",
+                  "alternativeAnswers",
+                  "hints",
+                  "difficulty",
+                  "category",
+                ],
+              },
+            },
+          },
+        ],
+        tool_choice: "auto",
+      }),
     })
 
-    console.log("[v0] AI Chat - Streaming response")
-    return result.toUIMessageStreamResponse()
+    if (!response.ok) {
+      const error = await response.text()
+      console.error("[v0] OpenAI API Error:", error)
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data: OpenAIResponse = await response.json()
+    console.log("[v0] AI Chat - Response received")
+
+    const assistantMessage = data.choices[0].message
+
+    // Check if tool was called
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      const toolCall = assistantMessage.tool_calls[0]
+      if (toolCall.function.name === "createProblem") {
+        const problemData = JSON.parse(toolCall.function.arguments)
+        console.log("[v0] AI Chat - Problem created:", problemData.title)
+
+        return new Response(
+          JSON.stringify({
+            role: "assistant",
+            content: assistantMessage.content || `問題「${problemData.title}」を作成しました。`,
+            toolCall: {
+              name: "createProblem",
+              parameters: problemData,
+            },
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+          },
+        )
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        role: "assistant",
+        content: assistantMessage.content,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    )
   } catch (error) {
     console.error("[v0] AI Chat - Error:", error)
     return new Response(

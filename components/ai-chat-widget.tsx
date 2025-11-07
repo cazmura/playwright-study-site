@@ -1,12 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import { useChat } from "ai/react"
+import type React from "react"
+
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MessageCircle, X, Send, AlertCircle, CheckCircle } from "lucide-react"
+
+interface Message {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  toolCall?: {
+    name: string
+    parameters: any
+  }
+}
 
 interface AIChatWidgetProps {
   onProblemGenerated: (problem: {
@@ -23,45 +34,81 @@ interface AIChatWidgetProps {
 
 export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit,
-    isLoading,
-    error: chatError,
-  } = useChat({
-    api: "/api/ai-chat",
-    maxSteps: 5,
-    async onToolCall({ toolCall }) {
-      console.log("[v0] Tool called:", toolCall.toolName, toolCall.args)
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
 
-      if (toolCall.toolName === "createProblem") {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || isLoading) return
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input,
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setInput("")
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      console.log("[v0] Sending message to AI")
+      const response = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("[v0] Received response:", data)
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.content,
+        toolCall: data.toolCall,
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+
+      if (data.toolCall && data.toolCall.name === "createProblem") {
+        console.log("[v0] Creating problem:", data.toolCall.parameters)
         try {
-          // 問題データを登録
-          onProblemGenerated(toolCall.args as any)
-          setError(null)
-          return {
-            success: true,
-            message: `問題「${toolCall.args.title}」を作成しました。`,
-          }
+          onProblemGenerated({
+            ...data.toolCall.parameters,
+            folderId: data.toolCall.parameters.folderId || "default",
+          })
         } catch (err) {
           console.error("[v0] Failed to create problem:", err)
           setError("問題の作成に失敗しました")
-          return {
-            success: false,
-            message: "問題の作成に失敗しました",
-          }
         }
       }
-    },
-    onError: (error) => {
-      console.error("[v0] Chat error:", error)
-      setError(error.message)
-    },
-  })
+    } catch (err) {
+      console.error("[v0] Chat error:", err)
+      setError(err instanceof Error ? err.message : "エラーが発生しました")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   if (!isOpen) {
     return (
@@ -85,7 +132,7 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
       </CardHeader>
 
       <CardContent className="flex-1 p-0 overflow-hidden">
-        <ScrollArea className="h-full px-4">
+        <ScrollArea className="h-full px-4" ref={scrollRef}>
           {messages.length === 0 && (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm text-center p-4">
               こんにちは！問題を作成したい内容を教えてください。
@@ -94,10 +141,10 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
             </div>
           )}
 
-          {(error || chatError) && (
+          {error && (
             <div className="mx-4 my-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
-              <p className="text-sm text-destructive">{error || chatError?.message}</p>
+              <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
 
@@ -110,40 +157,13 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
                       message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                     }`}
                   >
-                    {message.parts?.map((part, index) => {
-                      if (part.type === "text") {
-                        return (
-                          <p key={index} className="text-sm whitespace-pre-wrap">
-                            {part.text}
-                          </p>
-                        )
-                      }
-
-                      if (part.type === "tool-invocation") {
-                        const toolInvocation = part.toolInvocation
-                        if (toolInvocation.toolName === "createProblem") {
-                          if (toolInvocation.state === "call") {
-                            return (
-                              <div key={index} className="text-sm flex items-center gap-2 text-muted-foreground">
-                                <CheckCircle className="h-4 w-4" />
-                                問題「{toolInvocation.args.title}」を作成中...
-                              </div>
-                            )
-                          }
-                          if (toolInvocation.state === "result") {
-                            return (
-                              <div key={index} className="text-sm flex items-center gap-2 text-green-600">
-                                <CheckCircle className="h-4 w-4" />
-                                {toolInvocation.result.message}
-                              </div>
-                            )
-                          }
-                        }
-                      }
-
-                      return null
-                    })}
-                    {!message.parts && <p className="text-sm whitespace-pre-wrap">{message.content}</p>}
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.toolCall && message.toolCall.name === "createProblem" && (
+                      <div className="mt-2 pt-2 border-t border-border/50 flex items-center gap-2 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-xs">問題「{message.toolCall.parameters.title}」を作成しました</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -163,7 +183,7 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
         <form onSubmit={handleSubmit} className="flex w-full gap-2">
           <Input
             value={input}
-            onChange={handleInputChange}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="メッセージを入力..."
             disabled={isLoading}
             className="flex-1"
