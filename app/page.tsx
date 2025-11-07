@@ -2066,6 +2066,62 @@ export default function PlaywrightLearningApp() {
               </CardContent>
             </Card>
 
+            {/* AI機能 */}
+            <Card>
+              <CardHeader>
+                <CardTitle>🤖 AI問題生成機能</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">💬 AIチャット</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• 画面右下のチャットボタンからAIアシスタントを起動</li>
+                    <li>• 学びたい内容を自然な言葉で伝えると、適切な問題を自動生成</li>
+                    <li>• 会話履歴を保持し、詳細を聞き返しながら問題を作成</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2">🎯 曖昧な要件のブレイクダウン</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• 「Playwrightを学びたい」のような抽象的な要望でもOK</li>
+                    <li>• AIが質問をして、学びたい内容を具体化</li>
+                    <li>• 難易度やシナリオを確認して、最適な問題を提案</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2">📚 複数問題の一括生成</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• 1つの要望から基礎→応用の流れで複数の問題を作成可能</li>
+                    <li>• 問題作成後、関連する追加問題を提案</li>
+                    <li>• 体系的な学習プランを自動構築</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2">🗂️ 自動フォルダ分類</h3>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• AI生成問題は「AI生成問題」フォルダに自動保存</li>
+                    <li>• このフォルダは削除不可で、常に利用可能</li>
+                    <li>• 手動作成の問題と明確に区別して管理</li>
+                  </ul>
+                </div>
+
+                <div className="bg-blue-50 p-3 rounded">
+                  <h3 className="font-semibold text-blue-800 mb-2">💡 使用例</h3>
+                  <div className="text-blue-700 text-sm space-y-2">
+                    <p><strong>例1（曖昧な要望）:</strong></p>
+                    <p className="pl-4">ユーザー: 「Playwrightを勉強したい」</p>
+                    <p className="pl-4">AI: 「どの分野を学習したいですか？」→ ユーザーが選択 → 問題作成</p>
+                    <p className="mt-2"><strong>例2（明確な要望）:</strong></p>
+                    <p className="pl-4">ユーザー: 「ボタンをクリックする方法を学びたい」</p>
+                    <p className="pl-4">AI: 即座に問題を作成 + 関連問題を提案</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* フォルダ機能 */}
             <Card>
               <CardHeader>
