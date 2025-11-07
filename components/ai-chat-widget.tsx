@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageCircle, X, Send } from "lucide-react"
+import { MessageCircle, X, Send, AlertCircle } from "lucide-react"
 
 interface AIChatWidgetProps {
   onProblemGenerated: (problem: {
@@ -23,21 +23,41 @@ interface AIChatWidgetProps {
 
 export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null) // Added error state
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    isLoading,
+    error: chatError,
+  } = useChat({
     api: "/api/ai-chat",
+    onError: (error) => {
+      // Added error handler
+      console.error("[v0] Chat error:", error)
+      setError(error.message)
+    },
     onFinish: (message) => {
+      console.log("[v0] Chat finished, message:", message.content) // Added debug log
+      setError(null)
+
       // メッセージから問題データを抽出
       try {
         const content = message.content
         // JSONブロックを探す
         const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/)
         if (jsonMatch) {
+          console.log("[v0] Found JSON block:", jsonMatch[1]) // Added debug log
           const problemData = JSON.parse(jsonMatch[1])
           onProblemGenerated(problemData)
+        } else {
+          console.log("[v0] No JSON block found in message") // Added debug log
         }
       } catch (error) {
         console.error("[v0] Failed to parse problem data:", error)
+        setError("問題データの解析に失敗しました")
       }
     },
   })
@@ -55,7 +75,7 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
   }
 
   return (
-    <Card className="fixed bottom-6 right-6 w-96 h-[600px] shadow-2xl flex flex-col">
+    <Card className="fixed bottom-6 right-6 w-96 h-[600px] shadow-2xl flex flex-col z-50">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="text-lg font-semibold">AI アシスタント</CardTitle>
         <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
@@ -63,7 +83,9 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
         </Button>
       </CardHeader>
 
-      <CardContent className="flex-1 p-0">
+      <CardContent className="flex-1 p-0 overflow-hidden">
+        {" "}
+        {/* Added overflow-hidden */}
         <ScrollArea className="h-full px-4">
           {messages.length === 0 && (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm text-center p-4">
@@ -72,6 +94,14 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
               例: 「Playwrightでボタンをクリックする方法を学びたい」
             </div>
           )}
+
+          {(error || chatError) && (
+            <div className="mx-4 my-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
+              <p className="text-sm text-destructive">{error || chatError?.message}</p>
+            </div>
+          )}
+
           <div className="space-y-4 py-4">
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
