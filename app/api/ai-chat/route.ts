@@ -1,4 +1,5 @@
 import { streamText, tool } from "ai"
+import { openai } from "@ai-sdk/openai"
 import { z } from "zod"
 
 export const maxDuration = 30
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
     console.log("[v0] AI Chat - Received messages:", messages.length)
 
     const result = streamText({
-      model: "openai/gpt-4o-mini",
+      model: openai("gpt-4o-mini"),
       messages,
       system: `あなたはPlaywrightの学習支援AIです。ユーザーの要望を聞いて、適切な学習問題を作成します。
 
