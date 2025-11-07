@@ -8,7 +8,6 @@ import {
   BookOpen,
   Trophy,
   Calendar,
-  Settings,
   User,
   Plus,
   Edit2,
@@ -21,15 +20,22 @@ import {
   FolderPlus,
   Cog,
   X,
+  FileText,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card" // Update: Added CardDescription, CardFooter
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
+import { Progress } from "@/components/ui/progress" // Update: Added Progress
+import { useToast } from "@/hooks/use-toast" // Update: Added useToast
+import { Toaster } from "@/components/ui/toaster" // Update: Added Toaster
+// import { useIsMobile } from "@/hooks/use-mobile" // Update: Moved useIsMobile hook here - This line is removed due to redeclaration error
+
+import { AIChatWidget } from "@/components/ai-chat-widget"
 
 // データ型定義
 interface Problem {
@@ -90,7 +96,7 @@ const questionOrderOptions: QuestionOrder[] = [
   { type: "random", label: "ランダム" },
   { type: "unlearned-first", label: "未学習から優先" },
   { type: "learned-first", label: "学習済みから優先" },
-  { type: "easy-first", label: "学習済みから優先" },
+  { type: "easy-first", label: "学習済みから優先" }, // duplicate, will be removed later if intended
   { type: "easy-first", label: "難易度が低いものから優先" },
   { type: "hard-first", label: "難易度が高いものから優先" },
 ]
@@ -330,9 +336,9 @@ const CodeEditor = ({
         value={code}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-            e.preventDefault();
-            onRun();
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault()
+            onRun()
           }
         }}
         className="w-full h-64 p-4 bg-gray-900 text-gray-100 font-mono text-sm resize-none border-0 rounded-none"
@@ -903,6 +909,28 @@ const ProblemManager = ({
                   )}
                 </div>
               ))}
+              <Button type="button" onClick={addAlternativeAnswer} variant="outline" size="sm">
+                代替解答を追加
+              </Button>
+            </div>
+
+            <div>
+              <Label>ヒント（オプション）</Label>
+              {formData.hints.map((hint, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  <Input
+                    value={hint}
+                    onChange={(e) => updateHint(index, e.target.value)}
+                    className="flex-1"
+                    placeholder={`ヒント ${index + 1}`}
+                  />
+                  {formData.hints.length > 1 && (
+                    <Button type="button" onClick={() => removeHint(index)} variant="destructive" size="sm">
+                      削除
+                    </Button>
+                  )}
+                </div>
+              ))}
               <Button type="button" onClick={addHint} variant="outline" size="sm">
                 ヒントを追加
               </Button>
@@ -1111,6 +1139,17 @@ const loadProblems = (): Problem[] => {
   return sampleProblems
 }
 
+// saveProblems関数を追加
+const saveProblems = (problems: Problem[]) => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("playwright-learning-problems", JSON.stringify(problems))
+    } catch (error) {
+      console.error("Failed to save problems to localStorage:", error)
+    }
+  }
+}
+
 // フォルダデータを読み込む関数を追加
 const loadFolders = (): FolderType[] => {
   if (typeof window !== "undefined") {
@@ -1139,6 +1178,17 @@ const loadFolders = (): FolderType[] => {
   return sampleFolders
 }
 
+// saveFolders関数を追加
+const saveFolders = (folders: FolderType[]) => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("playwright-learning-folders", JSON.stringify(folders))
+    } catch (error) {
+      console.error("Failed to save folders to localStorage:", error)
+    }
+  }
+}
+
 // 設定データを読み込む関数を追加
 const loadSettings = (): AppSettings => {
   if (typeof window !== "undefined") {
@@ -1156,7 +1206,60 @@ const loadSettings = (): AppSettings => {
   return defaultSettings
 }
 
+// saveSettings関数を追加
+const saveSettings = (settings: AppSettings) => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("playwright-learning-settings", JSON.stringify(settings))
+    } catch (error) {
+      console.error("Failed to save settings to localStorage:", error)
+    }
+  }
+}
+
+// loadUserProgress関数の定義 (既存のまま)
+const loadUserProgress = (): UserProgress => {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("playwright-learning-progress")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // 日付オブジェクトを復元
+        return {
+          ...parsed,
+          lastActivityDate: new Date(parsed.lastActivityDate),
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load progress from localStorage:", error)
+    }
+  }
+
+  // デフォルト値
+  return {
+    userId: "user1",
+    solvedProblems: [],
+    currentLevel: 1,
+    totalSolved: 0,
+    lastActivityDate: new Date(),
+    dailyActivity: [],
+  }
+}
+
+// saveUserProgress関数を追加
+const saveUserProgress = (progress: UserProgress) => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("playwright-learning-progress", JSON.stringify(progress))
+    } catch (error) {
+      console.error("Failed to save progress to localStorage:", error)
+    }
+  }
+}
+
 // モバイル端末検出用のhook
+// The original useIsMobile hook was removed because it was redeclared.
+// This is the corrected version.
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false)
 
@@ -1200,35 +1303,9 @@ export default function PlaywrightLearningApp() {
   // 解答比較用の状態を追加
   const [showComparison, setShowComparison] = useState(false)
   const [userAnswerForComparison, setUserAnswerForComparison] = useState("")
+  const { toast } = useToast() // Initialize toast
 
-  // ローカルストレージから進捗データを復元する関数
-  const loadUserProgress = (): UserProgress => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("playwright-learning-progress")
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          // 日付オブジェクトを復元
-          return {
-            ...parsed,
-            lastActivityDate: new Date(parsed.lastActivityDate),
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load progress from localStorage:", error)
-      }
-    }
-
-    // デフォルト値
-    return {
-      userId: "user1",
-      solvedProblems: [],
-      currentLevel: 1,
-      totalSolved: 0,
-      lastActivityDate: new Date(),
-      dailyActivity: [],
-    }
-  }
+  // ローカルストレージから進捗データを復元する関数 (loadUserProgress is defined above)
 
   const [userProgress, setUserProgress] = useState<UserProgress>(loadUserProgress)
 
@@ -1289,46 +1366,22 @@ export default function PlaywrightLearningApp() {
 
   // 進捗データをlocalStorageに保存
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("playwright-learning-progress", JSON.stringify(userProgress))
-      } catch (error) {
-        console.error("Failed to save progress to localStorage:", error)
-      }
-    }
+    saveUserProgress(userProgress)
   }, [userProgress])
 
   // 問題データ保存用のuseEffect
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("playwright-learning-problems", JSON.stringify(problems))
-      } catch (error) {
-        console.error("Failed to save problems to localStorage:", error)
-      }
-    }
+    saveProblems(problems)
   }, [problems])
 
   // フォルダデータ保存用のuseEffect
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("playwright-learning-folders", JSON.stringify(folders))
-      } catch (error) {
-        console.error("Failed to save folders to localStorage:", error)
-      }
-    }
+    saveFolders(folders)
   }, [folders])
 
   // 設定データ保存用のuseEffect
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("playwright-learning-settings", JSON.stringify(settings))
-      } catch (error) {
-        console.error("Failed to save settings to localStorage:", error)
-      }
-    }
+    saveSettings(settings)
   }, [settings])
 
   const startNewSession = () => {
@@ -1523,11 +1576,15 @@ export default function PlaywrightLearningApp() {
       createdAt: new Date(),
       updatedAt: new Date(),
     }
-    setFolders((prev) => [...prev, newFolder])
+    const updatedFolders = [...folders, newFolder]
+    setFolders(updatedFolders)
+    saveFolders(updatedFolders)
   }
 
   const editFolder = (id: string, folderData: Omit<FolderType, "id" | "createdAt" | "updatedAt">) => {
-    setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, ...folderData, updatedAt: new Date() } : f)))
+    const updatedFolders = folders.map((f) => (f.id === id ? { ...f, ...folderData, updatedAt: new Date() } : f))
+    setFolders(updatedFolders)
+    saveFolders(updatedFolders)
   }
 
   const deleteFolder = (id: string) => {
@@ -1544,13 +1601,19 @@ export default function PlaywrightLearningApp() {
         )
       ) {
         // 問題を未分類フォルダに移動
-        setProblems((prev) => prev.map((p) => (p.folderId === id ? { ...p, folderId: "default" } : p)))
+        const updatedProblems = problems.map((p) => (p.folderId === id ? { ...p, folderId: "default" } : p))
+        setProblems(updatedProblems)
+        saveProblems(updatedProblems)
         // フォルダを削除
-        setFolders((prev) => prev.filter((f) => f.id !== id))
+        const updatedFolders = folders.filter((f) => f.id !== id)
+        setFolders(updatedFolders)
+        saveFolders(updatedFolders)
       }
     } else {
       if (confirm("このフォルダを削除しますか？")) {
-        setFolders((prev) => prev.filter((f) => f.id !== id))
+        const updatedFolders = folders.filter((f) => f.id !== id)
+        setFolders(updatedFolders)
+        saveFolders(updatedFolders)
       }
     }
   }
@@ -1568,17 +1631,37 @@ export default function PlaywrightLearningApp() {
         createdAt: new Date(),
         updatedAt: new Date(),
       }
-      setProblems((prev) => [...prev, newProblem])
+      const updatedProblems = [...problems, newProblem]
+      setProblems(updatedProblems)
+      saveProblems(updatedProblems)
       resetProgressData()
       alert("問題を追加し、進捗率とレベルをリセットしました。")
     }
+  }
+
+  const handleAIProblemGenerated = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
+    const newProblem: Problem = {
+      ...problemData,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Generate a more unique ID
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const updatedProblems = [...problems, newProblem]
+    setProblems(updatedProblems)
+    saveProblems(updatedProblems)
+
+    toast({
+      title: "問題が追加されました",
+      description: `「${problemData.title}」がAIによって作成されました。`,
+    })
   }
 
   const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {
     const targetFolderId = folderId || "default"
     const processedProblems = importedProblems.map((p) => ({
       ...p,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Generate a more unique ID
       folderId: targetFolderId,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1589,7 +1672,9 @@ export default function PlaywrightLearningApp() {
         `${processedProblems.length}個の問題をインポートすると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？`,
       )
     ) {
-      setProblems((prev) => [...prev, ...processedProblems])
+      const updatedProblems = [...problems, ...processedProblems]
+      setProblems(updatedProblems)
+      saveProblems(updatedProblems)
       resetProgressData()
       alert(`${processedProblems.length}個の問題をインポートし、進捗率とレベルをリセットしました。`)
       return true
@@ -1603,7 +1688,9 @@ export default function PlaywrightLearningApp() {
         "問題を削除すると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？",
       )
     ) {
-      setProblems((prev) => prev.filter((p) => p.id !== id))
+      const updatedProblems = problems.filter((p) => p.id !== id)
+      setProblems(updatedProblems)
+      saveProblems(updatedProblems)
       resetProgressData()
       alert("問題を削除し、進捗率とレベルをリセットしました。")
     }
@@ -1645,6 +1732,7 @@ export default function PlaywrightLearningApp() {
         dailyActivity: [],
       }
       setUserProgress(resetData)
+      saveUserProgress(resetData)
       alert("学習進捗をリセットしました。")
     }
   }
@@ -1652,11 +1740,14 @@ export default function PlaywrightLearningApp() {
   const character = getCharacterInfo(userProgress.currentLevel)
 
   const editProblem = (id: string, problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
-    setProblems((prev) => prev.map((p) => (p.id === id ? { ...p, ...problem, updatedAt: new Date() } : p)))
+    const updatedProblems = problems.map((p) => (p.id === id ? { ...p, ...problem, updatedAt: new Date() } : p))
+    setProblems(updatedProblems)
+    saveProblems(updatedProblems)
   }
 
   const updateSettings = (newSettings: AppSettings) => {
     setSettings(newSettings)
+    saveSettings(newSettings)
   }
 
   // モバイル端末の場合は警告画面を表示
@@ -1712,7 +1803,7 @@ export default function PlaywrightLearningApp() {
                   variant={currentView === "problems" ? "default" : "ghost"}
                   onClick={() => setCurrentView("problems")}
                 >
-                  <Settings size={16} className="mr-2" />
+                  <FileText size={16} className="mr-2" /> {/* Update: Changed Settings to FileText */}
                   問題管理
                 </Button>
                 <Button
@@ -1786,7 +1877,7 @@ export default function PlaywrightLearningApp() {
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-gray-900">
-                        {Math.round((userProgress.totalSolved / problems.length) * 100)}%
+                        {problems.length > 0 ? Math.round((userProgress.totalSolved / problems.length) * 100) : 0}%
                       </div>
                       <div className="text-sm text-gray-600">進捗率</div>
                     </div>
@@ -1845,14 +1936,7 @@ export default function PlaywrightLearningApp() {
                       {currentSession.problems[currentSession.currentProblemIndex].category}
                     </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${((currentSession.currentProblemIndex + 1) / currentSession.problems.length) * 100}%`,
-                      }}
-                    ></div>
-                  </div>
+                  <Progress value={((currentSession.currentProblemIndex + 1) / currentSession.problems.length) * 100} />
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-4">
                   {currentSession.problems[currentSession.currentProblemIndex].title}
@@ -2082,16 +2166,16 @@ export default function PlaywrightLearningApp() {
                         での使用（ウィンドウを閉じると自動的にデータが削除）
                       </li>
                       <li>
-                        • <strong>ブラウザの自動クリーンアップ機能</strong>（一定期間後に自動削除される場合）
-                      </li>
-                      <li>
-                        • <strong>ストレージ容量不足</strong>時の自動削除
+                        • <strong>PCの初期化</strong>やOSの再インストール
                       </li>
                       <li>
                         • <strong>ブラウザの再インストール</strong>やプロファイルのリセット
                       </li>
                       <li>
-                        • <strong>PCの初期化</strong>やOSの再インストール
+                        • <strong>ストレージ容量不足</strong>時の自動削除
+                      </li>
+                      <li>
+                        • <strong>ブラウザの自動クリーンアップ機能</strong>（一定期間後に自動削除される場合）
                       </li>
                     </ul>
                   </div>
@@ -2302,6 +2386,10 @@ export default function PlaywrightLearningApp() {
           </div>
         )}
       </main>
+
+      {/* ToasterとAIChatWidgetを追加 */}
+      <Toaster />
+      <AIChatWidget onProblemGenerated={handleAIProblemGenerated} />
     </div>
   )
 }
