@@ -1934,6 +1934,28 @@ export default function PlaywrightLearningApp() {
               </Button>
             </div>
 
+            {/* Ko-fi サポートセクション */}
+            <Card>
+              <CardContent className="p-6 text-center">
+                <h3 className="text-lg font-semibold mb-3">☕ このアプリを支援</h3>
+                <p className="text-gray-600 mb-4 text-sm">
+                  このアプリが役に立ちましたか？開発を支援していただけると嬉しいです！
+                </p>
+                <a
+                  href={`https://ko-fi.com/${process.env.NEXT_PUBLIC_KOFI_USERNAME || "yourusername"}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block"
+                >
+                  <img
+                    src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
+                    alt="Buy Me a Coffee at ko-fi.com"
+                    className="h-12 hover:opacity-80 transition-opacity"
+                  />
+                </a>
+              </CardContent>
+            </Card>
+
             {/* 進捗リセットセクション - ダッシュボードの最下部に配置 */}
             <div className="text-center">
               <Button onClick={resetProgress} variant="destructive">
@@ -2362,6 +2384,42 @@ export default function PlaywrightLearningApp() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Ko-fi サポートセクション */}
+            <Card>
+              <CardHeader>
+                <CardTitle>☕ このアプリを支援</CardTitle>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                <p className="text-gray-700">
+                  このアプリは無料で利用できますが、開発やサーバー維持にはコストがかかります。
+                  <br />
+                  もしこのアプリが役に立ったと感じていただけたら、開発を支援していただけると嬉しいです！
+                </p>
+                <div className="bg-blue-50 p-4 rounded">
+                  <p className="text-blue-800 text-sm mb-3">💝 サポートしていただくと...</p>
+                  <ul className="text-blue-700 text-sm space-y-1 text-left">
+                    <li>• 新機能の開発が促進されます</li>
+                    <li>• バグ修正が迅速に行われます</li>
+                    <li>• サーバーの安定運用が継続できます</li>
+                    <li>• AI機能の利用コストをカバーできます</li>
+                  </ul>
+                </div>
+                <a
+                  href={`https://ko-fi.com/${process.env.NEXT_PUBLIC_KOFI_USERNAME || "yourusername"}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block"
+                >
+                  <img
+                    src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
+                    alt="Buy Me a Coffee at ko-fi.com"
+                    className="h-14 hover:opacity-80 transition-opacity"
+                  />
+                </a>
+                <p className="text-gray-500 text-xs">Ko-fiは手数料無料の支援プラットフォームです</p>
               </CardContent>
             </Card>
           </div>
