@@ -888,7 +888,11 @@ const ProblemManager = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{editingProblem ? "問題を編集" : "新しい問題を追加"}</CardTitle>
+          <CardTitle>
+            {editingProblem ? "問題を編集" : "新しい問題を追加"}
+            {/* デバッグ用 */}
+            <span className="text-xs text-gray-500 ml-2">(カテゴリモーダル: {isAddingCategory ? "開" : "閉"})</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -993,28 +997,42 @@ const ProblemManager = ({
               </div>
               <div>
                 <Label htmlFor="category">カテゴリ</Label>
-                <Select
-                  value={formData.category || undefined}
-                  onValueChange={(value) => {
-                    if (value === "__add_new__") {
+                <div className="space-y-2">
+                  <Select
+                    value={formData.category || undefined}
+                    onValueChange={(value) => {
+                      if (value === "__add_new__") {
+                        setIsAddingCategory(true)
+                        // モーダルを開くだけで、formDataは変更しない
+                      } else {
+                        setFormData((prev) => ({ ...prev, category: value }))
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="カテゴリを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      console.log("Add category button clicked")
                       setIsAddingCategory(true)
-                    } else {
-                      setFormData((prev) => ({ ...prev, category: value }))
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="カテゴリを選択" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="__add_new__">+ 新しいカテゴリを追加</SelectItem>
-                  </SelectContent>
-                </Select>
+                    }}
+                  >
+                    + 新しいカテゴリを追加
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label htmlFor="folder">フォルダ</Label>
@@ -1052,6 +1070,48 @@ const ProblemManager = ({
             </div>
           </form>
         </CardContent>
+
+        {/* 新しいカテゴリ追加モーダル */}
+        {isAddingCategory && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+            <Card className="w-96">
+              <CardHeader>
+                <CardTitle>新しいカテゴリを追加</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="newCategory">カテゴリ名</Label>
+                    <Input
+                      id="newCategory"
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddCategory()
+                        }
+                      }}
+                      placeholder="例: 基本操作"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" onClick={() => {
+                      setIsAddingCategory(false)
+                      setNewCategoryName("")
+                    }}>
+                      キャンセル
+                    </Button>
+                    <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+                      追加
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </Card>
     )
   }
@@ -1164,48 +1224,6 @@ const ProblemManager = ({
           </table>
         </div>
       </CardContent>
-
-      {/* 新しいカテゴリ追加モーダル */}
-      {isAddingCategory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="w-96">
-            <CardHeader>
-              <CardTitle>新しいカテゴリを追加</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="newCategory">カテゴリ名</Label>
-                  <Input
-                    id="newCategory"
-                    type="text"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleAddCategory()
-                      }
-                    }}
-                    placeholder="例: 基本操作"
-                    autoFocus
-                  />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => {
-                    setIsAddingCategory(false)
-                    setNewCategoryName("")
-                  }}>
-                    キャンセル
-                  </Button>
-                  <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
-                    追加
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </Card>
   )
 }
@@ -1765,6 +1783,21 @@ export default function PlaywrightLearningApp() {
       console.log("Category added successfully")
     } else {
       console.log("Category already exists")
+    }
+  }
+
+  const deleteCategory = (category: string) => {
+    // カテゴリを使用している問題があるかチェック
+    const problemsUsingCategory = problems.filter((p) => p.category === category)
+    if (problemsUsingCategory.length > 0) {
+      alert(`このカテゴリは${problemsUsingCategory.length}個の問題で使用されているため削除できません。`)
+      return
+    }
+
+    if (confirm(`カテゴリ「${category}」を削除しますか？`)) {
+      const updatedCategories = categories.filter((c) => c !== category)
+      setCategories(updatedCategories)
+      saveCategories(updatedCategories)
     }
   }
 
