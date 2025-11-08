@@ -689,26 +689,32 @@ const FolderManager = ({
 const ProblemManager = ({
   problems,
   folders,
+  categories,
   onAdd,
   onEdit,
   onDelete,
   onImport,
   onExport,
   onNavigateToProblems,
+  onAddCategory,
 }: {
   problems: Problem[]
   folders: FolderType[]
+  categories: string[]
   onAdd: (problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => void
   onEdit: (id: string, problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => void
   onDelete: (id: string) => void
   onImport: (problems: Problem[], folderId?: string) => void
   onExport: (folderId?: string) => void
   onNavigateToProblems: () => void
+  onAddCategory: (category: string) => void
 }) => {
   const [isAddingProblem, setIsAddingProblem] = useState(false)
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null)
   const [showExpectedCode, setShowExpectedCode] = useState<{ [key: string]: boolean }>({})
   const [selectedFolder, setSelectedFolder] = useState<string>("all")
+  const [isAddingCategory, setIsAddingCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     title: "",
@@ -732,6 +738,15 @@ const ProblemManager = ({
       category: "",
       folderId: "default",
     })
+  }
+
+  const handleAddCategory = () => {
+    if (newCategoryName.trim() && !categories.includes(newCategoryName.trim())) {
+      onAddCategory(newCategoryName.trim())
+      setFormData((prev) => ({ ...prev, category: newCategoryName.trim() }))
+      setNewCategoryName("")
+      setIsAddingCategory(false)
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -966,13 +981,28 @@ const ProblemManager = ({
               </div>
               <div>
                 <Label htmlFor="category">カテゴリ</Label>
-                <Input
-                  id="category"
-                  type="text"
+                <Select
                   value={formData.category}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-                  required
-                />
+                  onValueChange={(value) => {
+                    if (value === "__add_new__") {
+                      setIsAddingCategory(true)
+                    } else {
+                      setFormData((prev) => ({ ...prev, category: value }))
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="カテゴリを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__add_new__">+ 新しいカテゴリを追加</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="folder">フォルダ</Label>
@@ -1122,6 +1152,48 @@ const ProblemManager = ({
           </table>
         </div>
       </CardContent>
+
+      {/* 新しいカテゴリ追加モーダル */}
+      {isAddingCategory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-96">
+            <CardHeader>
+              <CardTitle>新しいカテゴリを追加</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="newCategory">カテゴリ名</Label>
+                  <Input
+                    id="newCategory"
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleAddCategory()
+                      }
+                    }}
+                    placeholder="例: 基本操作"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => {
+                    setIsAddingCategory(false)
+                    setNewCategoryName("")
+                  }}>
+                    キャンセル
+                  </Button>
+                  <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+                    追加
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </Card>
   )
 }
@@ -1302,12 +1374,40 @@ const normalizeQuotes = (code: string): string => {
 }
 
 // メインアプリケーション
+// カテゴリを読み込む関数
+const loadCategories = (): string[] => {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("playwright-learning-categories")
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (error) {
+      console.error("Failed to load categories from localStorage:", error)
+    }
+  }
+  // デフォルトカテゴリ
+  return ["基本操作", "要素の取得", "フォーム入力", "画面遷移", "アサーション"]
+}
+
+// カテゴリを保存する関数
+const saveCategories = (categories: string[]) => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("playwright-learning-categories", JSON.stringify(categories))
+    } catch (error) {
+      console.error("Failed to save categories to localStorage:", error)
+    }
+  }
+}
+
 export default function PlaywrightLearningApp() {
   const [currentView, setCurrentView] = useState<"dashboard" | "learning" | "problems" | "manual" | "settings">(
     "dashboard",
   )
   const [problems, setProblems] = useState<Problem[]>(loadProblems)
   const [folders, setFolders] = useState<FolderType[]>(loadFolders)
+  const [categories, setCategories] = useState<string[]>(loadCategories)
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
   const [currentSession, setCurrentSession] = useState<LearningSession | null>(null)
   const [userCode, setUserCode] = useState("")
@@ -1572,17 +1672,6 @@ export default function PlaywrightLearningApp() {
     setUserAnswerForComparison("")
   }
 
-  // 進捗リセット用のヘルパー関数
-  const resetProgressData = () => {
-    setUserProgress((prev) => ({
-      ...prev,
-      solvedProblems: [], // 解答済み問題のみクリア
-      totalSolved: 0, // 総解答数のみクリア
-      currentLevel: 1, // レベルもリセット
-      // dailyActivity, lastActivityDateは保持
-    }))
-  }
-
   // フォルダ管理関数
   const addFolder = (folderData: Omit<FolderType, "id" | "createdAt" | "updatedAt">) => {
     const newFolder: FolderType = {
@@ -1640,22 +1729,22 @@ export default function PlaywrightLearningApp() {
 
   // 問題管理関数
   const addProblem = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
-    if (
-      confirm(
-        "問題を追加すると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？",
-      )
-    ) {
-      const newProblem: Problem = {
-        ...problemData,
-        id: Date.now().toString(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-      const updatedProblems = [...problems, newProblem]
-      setProblems(updatedProblems)
-      saveProblems(updatedProblems)
-      resetProgressData()
-      alert("問題を追加し、進捗率とレベルをリセットしました。")
+    const newProblem: Problem = {
+      ...problemData,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    const updatedProblems = [...problems, newProblem]
+    setProblems(updatedProblems)
+    saveProblems(updatedProblems)
+  }
+
+  const addCategory = (category: string) => {
+    if (!categories.includes(category)) {
+      const updatedCategories = [...categories, category]
+      setCategories(updatedCategories)
+      saveCategories(updatedCategories)
     }
   }
 
@@ -1685,32 +1774,27 @@ export default function PlaywrightLearningApp() {
       updatedAt: new Date(),
     }))
 
-    if (
-      confirm(
-        `${processedProblems.length}個の問題をインポートすると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？`,
-      )
-    ) {
+    if (confirm(`${processedProblems.length}個の問題をインポートしますか？`)) {
       const updatedProblems = [...problems, ...processedProblems]
       setProblems(updatedProblems)
       saveProblems(updatedProblems)
-      resetProgressData()
-      alert(`${processedProblems.length}個の問題をインポートし、進捗率とレベルをリセットしました。`)
+      alert(`${processedProblems.length}個の問題をインポートしました。`)
       return true
     }
     return false
   }
 
   const deleteProblem = (id: string) => {
-    if (
-      confirm(
-        "問題を削除すると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？",
-      )
-    ) {
+    if (confirm("この問題を削除しますか？")) {
       const updatedProblems = problems.filter((p) => p.id !== id)
       setProblems(updatedProblems)
       saveProblems(updatedProblems)
-      resetProgressData()
-      alert("問題を削除し、進捗率とレベルをリセットしました。")
+
+      // 削除した問題が解答済みリストに含まれていれば、そこからも削除
+      setUserProgress((prev) => ({
+        ...prev,
+        solvedProblems: prev.solvedProblems.filter((problemId) => problemId !== id),
+      }))
     }
   }
 
@@ -2087,12 +2171,14 @@ export default function PlaywrightLearningApp() {
             <ProblemManager
               problems={problems}
               folders={folders}
+              categories={categories}
               onAdd={addProblem}
               onEdit={editProblem}
               onDelete={deleteProblem}
               onImport={importProblems}
               onExport={exportProblems}
               onNavigateToProblems={() => setCurrentView("problems")}
+              onAddCategory={addCategory}
             />
           </div>
         )}
@@ -2137,9 +2223,18 @@ export default function PlaywrightLearningApp() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="bg-red-50 p-4 rounded">
-                  <h3 className="font-semibold text-red-800 mb-2">⚠️ 危険な操作</h3>
+                  <h3 className="font-semibold text-red-800 mb-2">⚠️ 学習進捗のリセット</h3>
                   <p className="text-red-700 text-sm mb-4">
-                    以下の操作は取り消せません。実行する前に、必要に応じてデータをエクスポートしてください。
+                    以下の項目が初期化されます（この操作は取り消せません）：
+                  </p>
+                  <ul className="text-red-700 text-sm mb-4 list-disc list-inside">
+                    <li>解答済み問題リスト</li>
+                    <li>レベル（Lv.1に戻ります）</li>
+                    <li>総解答数</li>
+                    <li>学習カレンダー・連続学習日数</li>
+                  </ul>
+                  <p className="text-red-700 text-sm mb-4">
+                    ※ 問題データやフォルダは削除されません
                   </p>
                   <div className="text-center">
                     <Button onClick={resetProgress} variant="destructive">
