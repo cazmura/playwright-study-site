@@ -1431,6 +1431,7 @@ export default function PlaywrightLearningApp() {
   const [showQuestionOrderModal, setShowQuestionOrderModal] = useState(false)
   const [showFolderSelectionModal, setShowFolderSelectionModal] = useState(false)
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
+  const [progressTab, setProgressTab] = useState<"category" | "folder">("category")
 
   // 問題を選択する関数を追加
   const selectProblemsForSession = (
@@ -2030,39 +2031,88 @@ export default function PlaywrightLearningApp() {
               </Card>
             </div>
 
-            {/* カテゴリ別進捗 */}
+            {/* カテゴリ別 / フォルダ別進捗 */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">📚 カテゴリ別進捗</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">📚 進捗状況</CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={progressTab === "category" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setProgressTab("category")}
+                    >
+                      カテゴリ別
+                    </Button>
+                    <Button
+                      variant={progressTab === "folder" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setProgressTab("folder")}
+                    >
+                      フォルダ別
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {(() => {
-                  const categories = Array.from(new Set(problems.map((p) => p.category)))
-                  return categories.slice(0, 5).map((category) => {
-                    const categoryProblems = problems.filter((p) => p.category === category)
-                    const solvedInCategory = categoryProblems.filter((p) =>
-                      userProgress.solvedProblems.includes(p.id)
-                    ).length
-                    const percentage = categoryProblems.length > 0
-                      ? Math.round((solvedInCategory / categoryProblems.length) * 100)
-                      : 0
+                {progressTab === "category" ? (
+                  // カテゴリ別進捗
+                  (() => {
+                    const categories = Array.from(new Set(problems.map((p) => p.category)))
+                    return categories.slice(0, 5).map((category) => {
+                      const categoryProblems = problems.filter((p) => p.category === category)
+                      const solvedInCategory = categoryProblems.filter((p) =>
+                        userProgress.solvedProblems.includes(p.id)
+                      ).length
+                      const percentage = categoryProblems.length > 0
+                        ? Math.round((solvedInCategory / categoryProblems.length) * 100)
+                        : 0
 
-                    return (
-                      <div key={category}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-700">{category}</span>
-                          <span className="text-gray-600">{percentage}% ({solvedInCategory}/{categoryProblems.length}問)</span>
+                      return (
+                        <div key={category}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-700">{category}</span>
+                            <span className="text-gray-600">{percentage}% ({solvedInCategory}/{categoryProblems.length}問)</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full transition-all"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-green-500 h-2 rounded-full transition-all"
-                            style={{ width: `${percentage}%` }}
-                          />
+                      )
+                    })
+                  })()
+                ) : (
+                  // フォルダ別進捗
+                  (() => {
+                    return folders.map((folder) => {
+                      const folderProblems = problems.filter((p) => p.folderId === folder.id)
+                      const solvedInFolder = folderProblems.filter((p) =>
+                        userProgress.solvedProblems.includes(p.id)
+                      ).length
+                      const percentage = folderProblems.length > 0
+                        ? Math.round((solvedInFolder / folderProblems.length) * 100)
+                        : 0
+
+                      return (
+                        <div key={folder.id}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-700">{folder.name}</span>
+                            <span className="text-gray-600">{percentage}% ({solvedInFolder}/{folderProblems.length}問)</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })
-                })()}
+                      )
+                    })
+                  })()
+                )}
               </CardContent>
             </Card>
 
