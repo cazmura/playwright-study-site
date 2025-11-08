@@ -1841,11 +1841,20 @@ export default function PlaywrightLearningApp() {
               </nav>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
-                <span className="text-lg">{character.emoji}</span>
-                <div className="text-sm">
-                  <div className={`font-medium ${character.color}`}>Lv.{userProgress.currentLevel}</div>
-                  <div className="text-gray-600 text-xs">{character.name}</div>
+              <div className="flex items-center gap-3">
+                <div className="text-sm font-medium text-gray-700">
+                  🔥 {(() => {
+                    let streak = 0
+                    const sortedActivity = [...userProgress.dailyActivity].sort((a, b) => b.date.localeCompare(a.date))
+                    for (const activity of sortedActivity) {
+                      if (activity.problemsSolved > 0) streak++
+                      else break
+                    }
+                    return streak
+                  })()}日
+                </div>
+                <div className="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                  Lv.{userProgress.currentLevel}
                 </div>
               </div>
             </div>
@@ -1856,107 +1865,131 @@ export default function PlaywrightLearningApp() {
       {/* メインコンテンツ */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentView === "dashboard" && (
-          <div className="space-y-8">
-            {/* 学習統計 */}
-            <div className="grid grid-cols-3 gap-6">
+          <div className="space-y-6">
+            {/* 今日の学習進捗 - 最優先エリア */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">📊 今日の学習</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-600">解答した問題</div>
+                    <div className="text-2xl font-bold">
+                      {userProgress.dailyActivity.find(
+                        (a) => a.date === new Date().toISOString().split("T")[0]
+                      )?.problemsSolved || 0}問
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">総解答数</div>
+                    <div className="text-2xl font-bold">{userProgress.totalSolved}問</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">🔥 連続学習</div>
+                    <div className="text-2xl font-bold">
+                      {(() => {
+                        let streak = 0
+                        const sortedActivity = [...userProgress.dailyActivity].sort((a, b) => b.date.localeCompare(a.date))
+                        for (const activity of sortedActivity) {
+                          if (activity.problemsSolved > 0) streak++
+                          else break
+                        }
+                        return streak
+                      })()}日
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 次の目標 + 今週の進捗 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <BookOpen className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">{userProgress.totalSolved}</div>
-                      <div className="text-sm text-gray-600">解答済み問題</div>
-                    </div>
+                <CardHeader>
+                  <CardTitle className="text-lg">🎯 次の目標</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">レベル{userProgress.currentLevel + 1}まで</span>
+                    <span className="text-lg font-bold">あと{10 - (userProgress.totalSolved % 10)}問</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all"
+                      style={{ width: `${((userProgress.totalSolved % 10) / 10) * 100}%` }}
+                    />
                   </div>
                 </CardContent>
               </Card>
+
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <Calendar className="text-purple-600" size={20} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {userProgress.dailyActivity.filter((a) => a.problemsSolved > 0).length}
-                      </div>
-                      <div className="text-sm text-gray-600">学習日数</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-yellow-100 rounded-lg">
-                      <User className="text-yellow-600" size={20} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {problems.length > 0 ? Math.round((userProgress.totalSolved / problems.length) * 100) : 0}%
-                      </div>
-                      <div className="text-sm text-gray-600">進捗率</div>
+                <CardHeader>
+                  <CardTitle className="text-lg">📈 今週の進捗</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">今週の解答数</span>
+                      <span className="text-lg font-bold">
+                        {(() => {
+                          const weekAgo = new Date()
+                          weekAgo.setDate(weekAgo.getDate() - 7)
+                          return userProgress.dailyActivity
+                            .filter((a) => new Date(a.date) >= weekAgo)
+                            .reduce((sum, a) => sum + a.problemsSolved, 0)
+                        })()}問
+                      </span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* キャラクター表示 */}
+            {/* カテゴリ別進捗 */}
             <Card>
-              <CardContent className="p-6 text-center">
-                <div className="text-6xl mb-4">{character.emoji}</div>
-                <h2 className={`text-2xl font-bold mb-2 ${character.color}`}>レベル {userProgress.currentLevel}</h2>
-                <p className="text-gray-600 mb-4">{character.name}</p>
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-                  <div
-                    className="bg-blue-500 h-3 rounded-full transition-all duration-300"
-                    style={{ width: `${((userProgress.totalSolved % 10) / 10) * 100}%` }}
-                  ></div>
-                </div>
-                <p className="text-sm text-gray-600">次のレベルまで {10 - (userProgress.totalSolved % 10)} 問</p>
+              <CardHeader>
+                <CardTitle className="text-lg">📚 カテゴリ別進捗</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(() => {
+                  const categories = Array.from(new Set(problems.map((p) => p.category)))
+                  return categories.slice(0, 5).map((category) => {
+                    const categoryProblems = problems.filter((p) => p.category === category)
+                    const solvedInCategory = categoryProblems.filter((p) =>
+                      userProgress.solvedProblems.includes(p.id)
+                    ).length
+                    const percentage = categoryProblems.length > 0
+                      ? Math.round((solvedInCategory / categoryProblems.length) * 100)
+                      : 0
+
+                    return (
+                      <div key={category}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-700">{category}</span>
+                          <span className="text-gray-600">{percentage}% ({solvedInCategory}/{categoryProblems.length}問)</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-green-500 h-2 rounded-full transition-all"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })
+                })()}
               </CardContent>
             </Card>
 
-            {/* 学習カレンダー */}
-            <LearningCalendar dailyActivity={userProgress.dailyActivity} />
+            {/* 学習カレンダー（4週間に短縮） */}
+            <LearningCalendar dailyActivity={userProgress.dailyActivity.slice(-28)} />
 
             {/* 学習開始ボタン */}
             <div className="text-center">
               <Button onClick={startNewSession} size="lg" className="text-lg">
                 <Play size={20} className="mr-2" />
                 新しいセッションを開始
-              </Button>
-            </div>
-
-            {/* Ko-fi サポートセクション */}
-            <Card>
-              <CardContent className="p-6 text-center">
-                <h3 className="text-lg font-semibold mb-3">☕ このアプリを支援</h3>
-                <p className="text-gray-600 mb-4 text-sm">
-                  このアプリが役に立ちましたか？開発を支援していただけると嬉しいです！
-                </p>
-                <a
-                  href={`https://ko-fi.com/${process.env.NEXT_PUBLIC_KOFI_USERNAME || "yourusername"}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block"
-                >
-                  <img
-                    src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
-                    alt="Buy Me a Coffee at ko-fi.com"
-                    className="h-12 hover:opacity-80 transition-opacity"
-                  />
-                </a>
-              </CardContent>
-            </Card>
-
-            {/* 進捗リセットセクション - ダッシュボードの最下部に配置 */}
-            <div className="text-center">
-              <Button onClick={resetProgress} variant="destructive">
-                学習進捗をリセット
               </Button>
             </div>
           </div>
@@ -2067,6 +2100,55 @@ export default function PlaywrightLearningApp() {
         {currentView === "settings" && (
           <div className="space-y-8">
             <SettingsManager settings={settings} onUpdate={updateSettings} />
+
+            {/* Ko-fi サポートセクション */}
+            <Card>
+              <CardHeader>
+                <CardTitle>☕ このアプリを支援</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-gray-700">
+                  このアプリは無料で利用できますが、開発やサーバー維持にはコストがかかります。
+                  <br />
+                  もしこのアプリが役に立ったと感じていただけたら、開発を支援していただけると嬉しいです！
+                </p>
+                <div className="text-center">
+                  <a
+                    href={`https://ko-fi.com/${process.env.NEXT_PUBLIC_KOFI_USERNAME || "yourusername"}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <img
+                      src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
+                      alt="Buy Me a Coffee at ko-fi.com"
+                      className="h-12 hover:opacity-80 transition-opacity"
+                    />
+                  </a>
+                </div>
+                <p className="text-gray-500 text-xs text-center">Ko-fiは手数料無料の支援プラットフォームです</p>
+              </CardContent>
+            </Card>
+
+            {/* 学習進捗リセット */}
+            <Card>
+              <CardHeader>
+                <CardTitle>🗑️ データ管理</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-red-50 p-4 rounded">
+                  <h3 className="font-semibold text-red-800 mb-2">⚠️ 危険な操作</h3>
+                  <p className="text-red-700 text-sm mb-4">
+                    以下の操作は取り消せません。実行する前に、必要に応じてデータをエクスポートしてください。
+                  </p>
+                  <div className="text-center">
+                    <Button onClick={resetProgress} variant="destructive">
+                      学習進捗をリセット
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
