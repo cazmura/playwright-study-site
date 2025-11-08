@@ -61,9 +61,11 @@ export async function POST(req: Request) {
 
 3. **問題作成のガイドライン**：
    - 問題の難易度は、ユーザーのレベルに応じて1（初級）、2（中級）、3（上級）から選択してください
-   - expectedCodeには、実際に動作するPlaywrightのコードを記述してください
+   - **重要**: expectedCodeには、**1行のコード**のみを記述してください（複数行は禁止）
+   - 1行で完結するシンプルな操作の問題を作成してください
+   - 例: await page.click('button') や await page.fill('#name', 'test')
    - hintsは段階的に詳しくなるように3つ程度用意してください
-   - alternativeAnswersには、正解の別の書き方を含めてください
+   - alternativeAnswersには、正解の別の書き方を含めてください（各解答も1行のみ）
 
 ## 例
 
@@ -79,6 +81,16 @@ export async function POST(req: Request) {
 **明確な要望への対応例**：
 - ユーザー：「ボタンをクリックする方法を学びたい」
 - AI：問題を作成 → 「ボタンクリックの基本問題を作成しました。さらに、特定の条件でのボタンクリック（disabled状態の確認など）も学習したい場合はお知らせください。」
+
+**1行コードの問題例**：
+良い例:
+- expectedCode: "await page.click('button')"
+- expectedCode: "await page.fill('#email', 'test@example.com')"
+- expectedCode: "await page.locator('.submit').click()"
+
+悪い例（複数行は禁止）:
+- "const button = page.locator('button');\nawait button.click();" ← NG
+- "await page.goto('https://example.com');\nawait page.click('button');" ← NG
 
 問題を作成する際は、必ずcreateProblemツールを呼び出してください。`,
           },

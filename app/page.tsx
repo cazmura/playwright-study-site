@@ -1672,10 +1672,7 @@ export default function PlaywrightLearningApp() {
     setProblems(updatedProblems)
     saveProblems(updatedProblems)
 
-    toast({
-      title: "問題が追加されました",
-      description: `「${problemData.title}」がAIによって作成されました。`,
-    })
+    // toastは表示しない（AIチャット内で完結するため）
   }
 
   const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {
