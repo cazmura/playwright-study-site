@@ -689,26 +689,34 @@ const FolderManager = ({
 const ProblemManager = ({
   problems,
   folders,
+  categories,
   onAdd,
   onEdit,
   onDelete,
   onImport,
   onExport,
   onNavigateToProblems,
+  onAddCategory,
+  onDeleteCategory,
 }: {
   problems: Problem[]
   folders: FolderType[]
+  categories: string[]
   onAdd: (problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => void
   onEdit: (id: string, problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => void
   onDelete: (id: string) => void
   onImport: (problems: Problem[], folderId?: string) => void
   onExport: (folderId?: string) => void
   onNavigateToProblems: () => void
+  onAddCategory: (category: string) => void
+  onDeleteCategory: (category: string) => void
 }) => {
   const [isAddingProblem, setIsAddingProblem] = useState(false)
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null)
   const [showExpectedCode, setShowExpectedCode] = useState<{ [key: string]: boolean }>({})
   const [selectedFolder, setSelectedFolder] = useState<string>("all")
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     title: "",
@@ -732,6 +740,27 @@ const ProblemManager = ({
       category: "",
       folderId: "default",
     })
+  }
+
+  const handleAddCategory = () => {
+    const trimmedCategory = newCategoryName.trim()
+    console.log("handleAddCategory called with:", trimmedCategory)
+    console.log("Current categories:", categories)
+
+    if (!trimmedCategory) {
+      alert("カテゴリ名を入力してください")
+      return
+    }
+    if (categories.includes(trimmedCategory)) {
+      alert("このカテゴリは既に存在します")
+      return
+    }
+
+    console.log("Adding category:", trimmedCategory)
+    onAddCategory(trimmedCategory)
+    setFormData((prev) => ({ ...prev, category: trimmedCategory }))
+    setNewCategoryName("")
+    // モーダルは開いたまま（管理モーダルの場合）
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -966,13 +995,34 @@ const ProblemManager = ({
               </div>
               <div>
                 <Label htmlFor="category">カテゴリ</Label>
-                <Input
-                  id="category"
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-                  required
-                />
+                <div className="flex gap-2">
+                  <Select
+                    value={formData.category || undefined}
+                    onValueChange={(value) => {
+                      setFormData((prev) => ({ ...prev, category: value }))
+                    }}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="カテゴリを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsManagingCategories(true)}
+                    title="カテゴリを管理"
+                  >
+                    <Cog size={16} />
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label htmlFor="folder">フォルダ</Label>
@@ -1010,6 +1060,86 @@ const ProblemManager = ({
             </div>
           </form>
         </CardContent>
+
+        {/* カテゴリ管理モーダル */}
+        {isManagingCategories && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+            <Card className="w-[500px]">
+              <CardHeader>
+                <CardTitle>カテゴリ管理</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* 新規カテゴリ追加 */}
+                  <div>
+                    <Label htmlFor="newCategory">新しいカテゴリを追加</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        id="newCategory"
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newCategoryName.trim()) {
+                            handleAddCategory()
+                          }
+                        }}
+                        placeholder="例: 基本操作"
+                      />
+                      <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+                        追加
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* 登録済みカテゴリ一覧 */}
+                  <div>
+                    <Label>登録済みカテゴリ ({categories.length}件)</Label>
+                    <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                      {categories.map((cat) => {
+                        const problemCount = problems.filter((p) => p.category === cat).length
+                        return (
+                          <div
+                            key={cat}
+                            className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100"
+                          >
+                            <div className="flex-1">
+                              <span className="font-medium">{cat}</span>
+                              <span className="text-xs text-gray-500 ml-2">({problemCount}問)</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onDeleteCategory(cat)}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        )
+                      })}
+                      {categories.length === 0 && (
+                        <div className="text-center text-gray-500 py-4">
+                          カテゴリが登録されていません
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2 border-t">
+                    <Button onClick={() => {
+                      setIsManagingCategories(false)
+                      setNewCategoryName("")
+                    }}>
+                      閉じる
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </Card>
     )
   }
@@ -1302,12 +1432,40 @@ const normalizeQuotes = (code: string): string => {
 }
 
 // メインアプリケーション
+// カテゴリを読み込む関数
+const loadCategories = (): string[] => {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("playwright-learning-categories")
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (error) {
+      console.error("Failed to load categories from localStorage:", error)
+    }
+  }
+  // デフォルトカテゴリ
+  return ["基本操作", "要素の取得", "フォーム入力", "画面遷移", "アサーション"]
+}
+
+// カテゴリを保存する関数
+const saveCategories = (categories: string[]) => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("playwright-learning-categories", JSON.stringify(categories))
+    } catch (error) {
+      console.error("Failed to save categories to localStorage:", error)
+    }
+  }
+}
+
 export default function PlaywrightLearningApp() {
   const [currentView, setCurrentView] = useState<"dashboard" | "learning" | "problems" | "manual" | "settings">(
     "dashboard",
   )
   const [problems, setProblems] = useState<Problem[]>(loadProblems)
   const [folders, setFolders] = useState<FolderType[]>(loadFolders)
+  const [categories, setCategories] = useState<string[]>(loadCategories)
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
   const [currentSession, setCurrentSession] = useState<LearningSession | null>(null)
   const [userCode, setUserCode] = useState("")
@@ -1331,6 +1489,7 @@ export default function PlaywrightLearningApp() {
   const [showQuestionOrderModal, setShowQuestionOrderModal] = useState(false)
   const [showFolderSelectionModal, setShowFolderSelectionModal] = useState(false)
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
+  const [progressTab, setProgressTab] = useState<"category" | "folder">("category")
 
   // 問題を選択する関数を追加
   const selectProblemsForSession = (
@@ -1572,17 +1731,6 @@ export default function PlaywrightLearningApp() {
     setUserAnswerForComparison("")
   }
 
-  // 進捗リセット用のヘルパー関数
-  const resetProgressData = () => {
-    setUserProgress((prev) => ({
-      ...prev,
-      solvedProblems: [], // 解答済み問題のみクリア
-      totalSolved: 0, // 総解答数のみクリア
-      currentLevel: 1, // レベルもリセット
-      // dailyActivity, lastActivityDateは保持
-    }))
-  }
-
   // フォルダ管理関数
   const addFolder = (folderData: Omit<FolderType, "id" | "createdAt" | "updatedAt">) => {
     const newFolder: FolderType = {
@@ -1640,22 +1788,44 @@ export default function PlaywrightLearningApp() {
 
   // 問題管理関数
   const addProblem = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
-    if (
-      confirm(
-        "問題を追加すると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？",
-      )
-    ) {
-      const newProblem: Problem = {
-        ...problemData,
-        id: Date.now().toString(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-      const updatedProblems = [...problems, newProblem]
-      setProblems(updatedProblems)
-      saveProblems(updatedProblems)
-      resetProgressData()
-      alert("問題を追加し、進捗率とレベルをリセットしました。")
+    const newProblem: Problem = {
+      ...problemData,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    const updatedProblems = [...problems, newProblem]
+    setProblems(updatedProblems)
+    saveProblems(updatedProblems)
+  }
+
+  const addCategory = (category: string) => {
+    console.log("addCategory called with:", category)
+    console.log("Current categories state:", categories)
+
+    if (!categories.includes(category)) {
+      const updatedCategories = [...categories, category]
+      console.log("Updated categories:", updatedCategories)
+      setCategories(updatedCategories)
+      saveCategories(updatedCategories)
+      console.log("Category added successfully")
+    } else {
+      console.log("Category already exists")
+    }
+  }
+
+  const deleteCategory = (category: string) => {
+    // カテゴリを使用している問題があるかチェック
+    const problemsUsingCategory = problems.filter((p) => p.category === category)
+    if (problemsUsingCategory.length > 0) {
+      alert(`このカテゴリは${problemsUsingCategory.length}個の問題で使用されているため削除できません。`)
+      return
+    }
+
+    if (confirm(`カテゴリ「${category}」を削除しますか？`)) {
+      const updatedCategories = categories.filter((c) => c !== category)
+      setCategories(updatedCategories)
+      saveCategories(updatedCategories)
     }
   }
 
@@ -1685,32 +1855,27 @@ export default function PlaywrightLearningApp() {
       updatedAt: new Date(),
     }))
 
-    if (
-      confirm(
-        `${processedProblems.length}個の問題をインポートすると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？`,
-      )
-    ) {
+    if (confirm(`${processedProblems.length}個の問題をインポートしますか？`)) {
       const updatedProblems = [...problems, ...processedProblems]
       setProblems(updatedProblems)
       saveProblems(updatedProblems)
-      resetProgressData()
-      alert(`${processedProblems.length}個の問題をインポートし、進捗率とレベルをリセットしました。`)
+      alert(`${processedProblems.length}個の問題をインポートしました。`)
       return true
     }
     return false
   }
 
   const deleteProblem = (id: string) => {
-    if (
-      confirm(
-        "問題を削除すると進捗率（解答済み問題）とレベルがリセットされます。学習カレンダーは保持されます。続行しますか？",
-      )
-    ) {
+    if (confirm("この問題を削除しますか？")) {
       const updatedProblems = problems.filter((p) => p.id !== id)
       setProblems(updatedProblems)
       saveProblems(updatedProblems)
-      resetProgressData()
-      alert("問題を削除し、進捗率とレベルをリセットしました。")
+
+      // 削除した問題が解答済みリストに含まれていれば、そこからも削除
+      setUserProgress((prev) => ({
+        ...prev,
+        solvedProblems: prev.solvedProblems.filter((problemId) => problemId !== id),
+      }))
     }
   }
 
@@ -1841,11 +2006,20 @@ export default function PlaywrightLearningApp() {
               </nav>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
-                <span className="text-lg">{character.emoji}</span>
-                <div className="text-sm">
-                  <div className={`font-medium ${character.color}`}>Lv.{userProgress.currentLevel}</div>
-                  <div className="text-gray-600 text-xs">{character.name}</div>
+              <div className="flex items-center gap-3">
+                <div className="text-sm font-medium text-gray-700">
+                  🔥 {(() => {
+                    let streak = 0
+                    const sortedActivity = [...userProgress.dailyActivity].sort((a, b) => b.date.localeCompare(a.date))
+                    for (const activity of sortedActivity) {
+                      if (activity.problemsSolved > 0) streak++
+                      else break
+                    }
+                    return streak
+                  })()}日
+                </div>
+                <div className="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                  Lv.{userProgress.currentLevel}
                 </div>
               </div>
             </div>
@@ -1856,107 +2030,180 @@ export default function PlaywrightLearningApp() {
       {/* メインコンテンツ */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentView === "dashboard" && (
-          <div className="space-y-8">
-            {/* 学習統計 */}
-            <div className="grid grid-cols-3 gap-6">
+          <div className="space-y-6">
+            {/* 今日の学習進捗 - 最優先エリア */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">📊 今日の学習</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-600">解答した問題</div>
+                    <div className="text-2xl font-bold">
+                      {userProgress.dailyActivity.find(
+                        (a) => a.date === new Date().toISOString().split("T")[0]
+                      )?.problemsSolved || 0}問
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">総解答数</div>
+                    <div className="text-2xl font-bold">{userProgress.totalSolved}問</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">🔥 連続学習</div>
+                    <div className="text-2xl font-bold">
+                      {(() => {
+                        let streak = 0
+                        const sortedActivity = [...userProgress.dailyActivity].sort((a, b) => b.date.localeCompare(a.date))
+                        for (const activity of sortedActivity) {
+                          if (activity.problemsSolved > 0) streak++
+                          else break
+                        }
+                        return streak
+                      })()}日
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 次の目標 + 今週の進捗 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <BookOpen className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">{userProgress.totalSolved}</div>
-                      <div className="text-sm text-gray-600">解答済み問題</div>
-                    </div>
+                <CardHeader>
+                  <CardTitle className="text-lg">🎯 次の目標</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">レベル{userProgress.currentLevel + 1}まで</span>
+                    <span className="text-lg font-bold">あと{10 - (userProgress.totalSolved % 10)}問</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all"
+                      style={{ width: `${((userProgress.totalSolved % 10) / 10) * 100}%` }}
+                    />
                   </div>
                 </CardContent>
               </Card>
+
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <Calendar className="text-purple-600" size={20} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {userProgress.dailyActivity.filter((a) => a.problemsSolved > 0).length}
-                      </div>
-                      <div className="text-sm text-gray-600">学習日数</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-yellow-100 rounded-lg">
-                      <User className="text-yellow-600" size={20} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {problems.length > 0 ? Math.round((userProgress.totalSolved / problems.length) * 100) : 0}%
-                      </div>
-                      <div className="text-sm text-gray-600">進捗率</div>
+                <CardHeader>
+                  <CardTitle className="text-lg">📈 今週の進捗</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">今週の解答数</span>
+                      <span className="text-lg font-bold">
+                        {(() => {
+                          const weekAgo = new Date()
+                          weekAgo.setDate(weekAgo.getDate() - 7)
+                          return userProgress.dailyActivity
+                            .filter((a) => new Date(a.date) >= weekAgo)
+                            .reduce((sum, a) => sum + a.problemsSolved, 0)
+                        })()}問
+                      </span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* キャラクター表示 */}
+            {/* カテゴリ別 / フォルダ別進捗 */}
             <Card>
-              <CardContent className="p-6 text-center">
-                <div className="text-6xl mb-4">{character.emoji}</div>
-                <h2 className={`text-2xl font-bold mb-2 ${character.color}`}>レベル {userProgress.currentLevel}</h2>
-                <p className="text-gray-600 mb-4">{character.name}</p>
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-                  <div
-                    className="bg-blue-500 h-3 rounded-full transition-all duration-300"
-                    style={{ width: `${((userProgress.totalSolved % 10) / 10) * 100}%` }}
-                  ></div>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">📚 進捗状況</CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={progressTab === "category" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setProgressTab("category")}
+                    >
+                      カテゴリ別
+                    </Button>
+                    <Button
+                      variant={progressTab === "folder" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setProgressTab("folder")}
+                    >
+                      フォルダ別
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-600">次のレベルまで {10 - (userProgress.totalSolved % 10)} 問</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {progressTab === "category" ? (
+                  // カテゴリ別進捗
+                  (() => {
+                    const categories = Array.from(new Set(problems.map((p) => p.category)))
+                    return categories.slice(0, 5).map((category) => {
+                      const categoryProblems = problems.filter((p) => p.category === category)
+                      const solvedInCategory = categoryProblems.filter((p) =>
+                        userProgress.solvedProblems.includes(p.id)
+                      ).length
+                      const percentage = categoryProblems.length > 0
+                        ? Math.round((solvedInCategory / categoryProblems.length) * 100)
+                        : 0
+
+                      return (
+                        <div key={category}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-700">{category}</span>
+                            <span className="text-gray-600">{percentage}% ({solvedInCategory}/{categoryProblems.length}問)</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full transition-all"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()
+                ) : (
+                  // フォルダ別進捗
+                  (() => {
+                    return folders.map((folder) => {
+                      const folderProblems = problems.filter((p) => p.folderId === folder.id)
+                      const solvedInFolder = folderProblems.filter((p) =>
+                        userProgress.solvedProblems.includes(p.id)
+                      ).length
+                      const percentage = folderProblems.length > 0
+                        ? Math.round((solvedInFolder / folderProblems.length) * 100)
+                        : 0
+
+                      return (
+                        <div key={folder.id}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-700">{folder.name}</span>
+                            <span className="text-gray-600">{percentage}% ({solvedInFolder}/{folderProblems.length}問)</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()
+                )}
               </CardContent>
             </Card>
 
-            {/* 学習カレンダー */}
-            <LearningCalendar dailyActivity={userProgress.dailyActivity} />
+            {/* 学習カレンダー（4週間に短縮） */}
+            <LearningCalendar dailyActivity={userProgress.dailyActivity.slice(-28)} />
 
             {/* 学習開始ボタン */}
             <div className="text-center">
               <Button onClick={startNewSession} size="lg" className="text-lg">
                 <Play size={20} className="mr-2" />
                 新しいセッションを開始
-              </Button>
-            </div>
-
-            {/* Ko-fi サポートセクション */}
-            <Card>
-              <CardContent className="p-6 text-center">
-                <h3 className="text-lg font-semibold mb-3">☕ このアプリを支援</h3>
-                <p className="text-gray-600 mb-4 text-sm">
-                  このアプリが役に立ちましたか？開発を支援していただけると嬉しいです！
-                </p>
-                <a
-                  href={`https://ko-fi.com/${process.env.NEXT_PUBLIC_KOFI_USERNAME || "yourusername"}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block"
-                >
-                  <img
-                    src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
-                    alt="Buy Me a Coffee at ko-fi.com"
-                    className="h-12 hover:opacity-80 transition-opacity"
-                  />
-                </a>
-              </CardContent>
-            </Card>
-
-            {/* 進捗リセットセクション - ダッシュボードの最下部に配置 */}
-            <div className="text-center">
-              <Button onClick={resetProgress} variant="destructive">
-                学習進捗をリセット
               </Button>
             </div>
           </div>
@@ -2054,12 +2301,15 @@ export default function PlaywrightLearningApp() {
             <ProblemManager
               problems={problems}
               folders={folders}
+              categories={categories}
               onAdd={addProblem}
               onEdit={editProblem}
               onDelete={deleteProblem}
               onImport={importProblems}
               onExport={exportProblems}
               onNavigateToProblems={() => setCurrentView("problems")}
+              onAddCategory={addCategory}
+              onDeleteCategory={deleteCategory}
             />
           </div>
         )}
@@ -2067,6 +2317,64 @@ export default function PlaywrightLearningApp() {
         {currentView === "settings" && (
           <div className="space-y-8">
             <SettingsManager settings={settings} onUpdate={updateSettings} />
+
+            {/* Ko-fi サポートセクション */}
+            <Card>
+              <CardHeader>
+                <CardTitle>☕ このアプリを支援</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-gray-700">
+                  このアプリは無料で利用できますが、開発やサーバー維持にはコストがかかります。
+                  <br />
+                  もしこのアプリが役に立ったと感じていただけたら、開発を支援していただけると嬉しいです！
+                </p>
+                <div className="text-center">
+                  <a
+                    href={`https://ko-fi.com/${process.env.NEXT_PUBLIC_KOFI_USERNAME || "yourusername"}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <img
+                      src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
+                      alt="Buy Me a Coffee at ko-fi.com"
+                      className="h-12 hover:opacity-80 transition-opacity"
+                    />
+                  </a>
+                </div>
+                <p className="text-gray-500 text-xs text-center">Ko-fiは手数料無料の支援プラットフォームです</p>
+              </CardContent>
+            </Card>
+
+            {/* 学習進捗リセット */}
+            <Card>
+              <CardHeader>
+                <CardTitle>🗑️ データ管理</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-red-50 p-4 rounded">
+                  <h3 className="font-semibold text-red-800 mb-2">⚠️ 学習進捗のリセット</h3>
+                  <p className="text-red-700 text-sm mb-4">
+                    以下の項目が初期化されます（この操作は取り消せません）：
+                  </p>
+                  <ul className="text-red-700 text-sm mb-4 list-disc list-inside">
+                    <li>解答済み問題リスト</li>
+                    <li>レベル（Lv.1に戻ります）</li>
+                    <li>総解答数</li>
+                    <li>学習カレンダー・連続学習日数</li>
+                  </ul>
+                  <p className="text-red-700 text-sm mb-4">
+                    ※ 問題データやフォルダは削除されません
+                  </p>
+                  <div className="text-center">
+                    <Button onClick={resetProgress} variant="destructive">
+                      学習進捗をリセット
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
