@@ -697,6 +697,7 @@ const ProblemManager = ({
   onExport,
   onNavigateToProblems,
   onAddCategory,
+  onDeleteCategory,
 }: {
   problems: Problem[]
   folders: FolderType[]
@@ -708,12 +709,13 @@ const ProblemManager = ({
   onExport: (folderId?: string) => void
   onNavigateToProblems: () => void
   onAddCategory: (category: string) => void
+  onDeleteCategory: (category: string) => void
 }) => {
   const [isAddingProblem, setIsAddingProblem] = useState(false)
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null)
   const [showExpectedCode, setShowExpectedCode] = useState<{ [key: string]: boolean }>({})
   const [selectedFolder, setSelectedFolder] = useState<string>("all")
-  const [isAddingCategory, setIsAddingCategory] = useState(false)
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
@@ -758,7 +760,7 @@ const ProblemManager = ({
     onAddCategory(trimmedCategory)
     setFormData((prev) => ({ ...prev, category: trimmedCategory }))
     setNewCategoryName("")
-    setIsAddingCategory(false)
+    // モーダルは開いたまま（管理モーダルの場合）
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -888,11 +890,7 @@ const ProblemManager = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>
-            {editingProblem ? "問題を編集" : "新しい問題を追加"}
-            {/* デバッグ用 */}
-            <span className="text-xs text-gray-500 ml-2">(カテゴリモーダル: {isAddingCategory ? "開" : "閉"})</span>
-          </CardTitle>
+          <CardTitle>{editingProblem ? "問題を編集" : "新しい問題を追加"}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -997,19 +995,14 @@ const ProblemManager = ({
               </div>
               <div>
                 <Label htmlFor="category">カテゴリ</Label>
-                <div className="space-y-2">
+                <div className="flex gap-2">
                   <Select
                     value={formData.category || undefined}
                     onValueChange={(value) => {
-                      if (value === "__add_new__") {
-                        setIsAddingCategory(true)
-                        // モーダルを開くだけで、formDataは変更しない
-                      } else {
-                        setFormData((prev) => ({ ...prev, category: value }))
-                      }
+                      setFormData((prev) => ({ ...prev, category: value }))
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="flex-1">
                       <SelectValue placeholder="カテゴリを選択" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1024,13 +1017,10 @@ const ProblemManager = ({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      console.log("Add category button clicked")
-                      setIsAddingCategory(true)
-                    }}
+                    onClick={() => setIsManagingCategories(true)}
+                    title="カテゴリを管理"
                   >
-                    + 新しいカテゴリを追加
+                    <Cog size={16} />
                   </Button>
                 </div>
               </div>
@@ -1071,40 +1061,78 @@ const ProblemManager = ({
           </form>
         </CardContent>
 
-        {/* 新しいカテゴリ追加モーダル */}
-        {isAddingCategory && (
+        {/* カテゴリ管理モーダル */}
+        {isManagingCategories && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-            <Card className="w-96">
+            <Card className="w-[500px]">
               <CardHeader>
-                <CardTitle>新しいカテゴリを追加</CardTitle>
+                <CardTitle>カテゴリ管理</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* 新規カテゴリ追加 */}
                   <div>
-                    <Label htmlFor="newCategory">カテゴリ名</Label>
-                    <Input
-                      id="newCategory"
-                      type="text"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleAddCategory()
-                        }
-                      }}
-                      placeholder="例: 基本操作"
-                      autoFocus
-                    />
+                    <Label htmlFor="newCategory">新しいカテゴリを追加</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        id="newCategory"
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newCategoryName.trim()) {
+                            handleAddCategory()
+                          }
+                        }}
+                        placeholder="例: 基本操作"
+                      />
+                      <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+                        追加
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button variant="outline" onClick={() => {
-                      setIsAddingCategory(false)
+
+                  {/* 登録済みカテゴリ一覧 */}
+                  <div>
+                    <Label>登録済みカテゴリ ({categories.length}件)</Label>
+                    <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                      {categories.map((cat) => {
+                        const problemCount = problems.filter((p) => p.category === cat).length
+                        return (
+                          <div
+                            key={cat}
+                            className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100"
+                          >
+                            <div className="flex-1">
+                              <span className="font-medium">{cat}</span>
+                              <span className="text-xs text-gray-500 ml-2">({problemCount}問)</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onDeleteCategory(cat)}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        )
+                      })}
+                      {categories.length === 0 && (
+                        <div className="text-center text-gray-500 py-4">
+                          カテゴリが登録されていません
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2 border-t">
+                    <Button onClick={() => {
+                      setIsManagingCategories(false)
                       setNewCategoryName("")
                     }}>
-                      キャンセル
-                    </Button>
-                    <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
-                      追加
+                      閉じる
                     </Button>
                   </div>
                 </div>
@@ -2281,6 +2309,7 @@ export default function PlaywrightLearningApp() {
               onExport={exportProblems}
               onNavigateToProblems={() => setCurrentView("problems")}
               onAddCategory={addCategory}
+              onDeleteCategory={deleteCategory}
             />
           </div>
         )}
