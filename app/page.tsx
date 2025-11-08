@@ -741,12 +741,24 @@ const ProblemManager = ({
   }
 
   const handleAddCategory = () => {
-    if (newCategoryName.trim() && !categories.includes(newCategoryName.trim())) {
-      onAddCategory(newCategoryName.trim())
-      setFormData((prev) => ({ ...prev, category: newCategoryName.trim() }))
-      setNewCategoryName("")
-      setIsAddingCategory(false)
+    const trimmedCategory = newCategoryName.trim()
+    console.log("handleAddCategory called with:", trimmedCategory)
+    console.log("Current categories:", categories)
+
+    if (!trimmedCategory) {
+      alert("カテゴリ名を入力してください")
+      return
     }
+    if (categories.includes(trimmedCategory)) {
+      alert("このカテゴリは既に存在します")
+      return
+    }
+
+    console.log("Adding category:", trimmedCategory)
+    onAddCategory(trimmedCategory)
+    setFormData((prev) => ({ ...prev, category: trimmedCategory }))
+    setNewCategoryName("")
+    setIsAddingCategory(false)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -982,7 +994,7 @@ const ProblemManager = ({
               <div>
                 <Label htmlFor="category">カテゴリ</Label>
                 <Select
-                  value={formData.category}
+                  value={formData.category || undefined}
                   onValueChange={(value) => {
                     if (value === "__add_new__") {
                       setIsAddingCategory(true)
@@ -1742,10 +1754,17 @@ export default function PlaywrightLearningApp() {
   }
 
   const addCategory = (category: string) => {
+    console.log("addCategory called with:", category)
+    console.log("Current categories state:", categories)
+
     if (!categories.includes(category)) {
       const updatedCategories = [...categories, category]
+      console.log("Updated categories:", updatedCategories)
       setCategories(updatedCategories)
       saveCategories(updatedCategories)
+      console.log("Category added successfully")
+    } else {
+      console.log("Category already exists")
     }
   }
 
