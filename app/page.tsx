@@ -1168,11 +1168,11 @@ const ProblemManager = ({
               </SelectContent>
             </Select>
             <Button onClick={() => onExport(selectedFolder === "all" ? undefined : selectedFolder)} variant="outline">
-              <Download size={16} className="mr-2" />
+              <Upload size={16} className="mr-2" />
               エクスポート
             </Button>
             <Button onClick={() => fileInputRef.current?.click()} variant="outline">
-              <Upload size={16} className="mr-2" />
+              <Download size={16} className="mr-2" />
               インポート
             </Button>
             <Button onClick={() => setIsAddingProblem(true)}>
@@ -2849,7 +2849,7 @@ https://www.playwright-study-site.org/`
                                 size="sm"
                                 variant="outline"
                               >
-                                <Upload size={14} className="mr-1" />
+                                <Download size={14} className="mr-1" />
                                 インポート
                               </Button>
                               <Button
@@ -2857,7 +2857,7 @@ https://www.playwright-study-site.org/`
                                 size="sm"
                                 variant="outline"
                               >
-                                <Download size={14} className="mr-1" />
+                                <Upload size={14} className="mr-1" />
                                 エクスポート
                               </Button>
                               <Button
