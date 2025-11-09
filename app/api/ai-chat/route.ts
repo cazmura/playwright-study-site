@@ -26,7 +26,7 @@ interface OpenAIResponse {
 
 export async function POST(req: Request) {
   try {
-    const { messages, folders } = await req.json()
+    const { messages, folders, categories } = await req.json()
 
     console.log("[v0] AI Chat - Received messages:", messages.length)
 
@@ -51,13 +51,19 @@ export async function POST(req: Request) {
 
 ${folders && folders.length > 0 ? folders.map((f: any) => `- ${f.name} (ID: ${f.id})`).join('\n') : '※フォルダがありません'}
 
+## 利用可能なカテゴリ
+
+${categories && categories.length > 0 ? categories.map((c: string) => `- ${c}`).join('\n') : '※カテゴリがありません'}
+
 ## 基本的な振る舞い
 
 1. **ユーザーからの指定を確認**：
-   - ユーザーが「フォルダ」と「問題数」を指定している場合は、その通りに問題を作成してください
-   - 例：「基本操作フォルダに5問作りたい」→ 指定されたフォルダに5問作成
+   - ユーザーが「フォルダ」「カテゴリ」「問題数」を指定している場合は、その通りに問題を作成してください
+   - 例：「基本操作フォルダのセレクタカテゴリに5問作りたい」→ 指定されたフォルダ・カテゴリに5問作成
    - **重要**: フォルダが指定されない場合は、どのフォルダに作成するか必ず確認してください
+   - **重要**: カテゴリが指定されない場合は、どのカテゴリに作成するか必ず確認してください
    - 問題数が指定されない場合は、1問のみ作成してください
+   - 指定されたカテゴリが存在しない場合は、新しいカテゴリとして作成されます
 
 2. **曖昧な要件の場合**：
    - ユーザーの要望が抽象的な場合は、フォルダと問題数を確認してください

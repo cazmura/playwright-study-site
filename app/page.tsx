@@ -2089,9 +2089,11 @@ export default function PlaywrightLearningApp() {
 
     if (problemsList.length === 0) return
 
-    // 最初の問題のフォルダIDを確認（すべて同じフォルダに保存される想定）
+    // 最初の問題のフォルダIDとカテゴリを確認（すべて同じフォルダ・カテゴリに保存される想定）
     const targetFolderId = problemsList[0].folderId
+    const targetCategory = problemsList[0].category
     let finalFolderId = targetFolderId
+    let finalCategory = targetCategory
 
     // フォルダIDの検証（1回のみ）
     const folderExists = folders.some((f) => f.id === targetFolderId)
@@ -2134,10 +2136,56 @@ export default function PlaywrightLearningApp() {
       }
     }
 
+    // カテゴリの検証と作成（1回のみ）
+    const categoryExists = categories.includes(targetCategory)
+
+    if (!categoryExists && targetCategory && targetCategory.trim()) {
+      // カテゴリが存在しない場合、ユーザーに確認
+      const createCategory = confirm(
+        `カテゴリ「${targetCategory}」が見つかりませんでした。\n\n新しいカテゴリとして作成しますか？\n\n「OK」で作成、「キャンセル」で既存のカテゴリから選択します。`
+      )
+
+      if (createCategory) {
+        // 新しいカテゴリを作成
+        addCategory(targetCategory)
+        finalCategory = targetCategory
+      } else {
+        // 既存のカテゴリから選択（カテゴリがある場合）
+        if (categories.length > 0) {
+          const categoryOptions = categories.map((c, i) => `${i + 1}. ${c}`).join("\n")
+          const selection = prompt(
+            `既存のカテゴリから選択してください（番号を入力）:\n\n${categoryOptions}\n\nまたは、新しいカテゴリ名を直接入力してください:`,
+          )
+
+          if (selection) {
+            const selectionNum = parseInt(selection)
+            if (!isNaN(selectionNum) && selectionNum > 0 && selectionNum <= categories.length) {
+              // 番号で選択
+              finalCategory = categories[selectionNum - 1]
+            } else if (selection.trim()) {
+              // 新しいカテゴリ名を入力
+              addCategory(selection.trim())
+              finalCategory = selection.trim()
+            } else {
+              finalCategory = targetCategory
+            }
+          } else {
+            // キャンセルされた場合は元のカテゴリを使用
+            finalCategory = targetCategory
+          }
+        } else {
+          // カテゴリが1つもない場合は自動的に作成
+          addCategory(targetCategory)
+          finalCategory = targetCategory
+        }
+      }
+    }
+
     // 全ての問題を作成
     const newProblems: Problem[] = problemsList.map((problemData, index) => ({
       ...problemData,
       folderId: finalFolderId, // 確定したフォルダIDを使用
+      category: finalCategory, // 確定したカテゴリを使用
       id: (Date.now() + index).toString() + Math.random().toString(36).substr(2, 9),
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -2147,7 +2195,9 @@ export default function PlaywrightLearningApp() {
     setProblems(updatedProblems)
     saveProblems(updatedProblems)
 
-    console.log(`[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId}`)
+    console.log(
+      `[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId} with category ${finalCategory}`,
+    )
   }
 
   const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {
@@ -4124,7 +4174,7 @@ export default function PlaywrightLearningApp() {
 
       {/* ToasterとAIChatWidgetを追加 */}
       <Toaster />
-      <AIChatWidget onProblemGenerated={handleAIProblemGenerated} folders={folders} />
+      <AIChatWidget onProblemGenerated={handleAIProblemGenerated} folders={folders} categories={categories} />
     </div>
   )
 }

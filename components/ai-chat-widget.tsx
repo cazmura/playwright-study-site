@@ -53,9 +53,10 @@ interface AIChatWidgetProps {
         },
   ) => void
   folders: FolderType[]
+  categories: string[]
 }
 
-export function AIChatWidget({ onProblemGenerated, folders }: AIChatWidgetProps) {
+export function AIChatWidget({ onProblemGenerated, folders, categories }: AIChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -95,6 +96,7 @@ export function AIChatWidget({ onProblemGenerated, folders }: AIChatWidgetProps)
             content: m.content,
           })),
           folders: folders,
+          categories: categories,
         }),
       })
 
