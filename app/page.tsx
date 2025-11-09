@@ -66,6 +66,8 @@ interface FolderType {
 interface UserProgress {
   userId: string
   solvedProblems: string[]
+  // 自力で初めて正解した問題のID
+  solvedWithoutHelp: string[]
   currentLevel: number
   totalSolved: number
   lastActivityDate: Date
@@ -1372,6 +1374,7 @@ const loadUserProgress = (): UserProgress => {
         // 日付オブジェクトを復元
         return {
           ...parsed,
+          solvedWithoutHelp: Array.isArray(parsed.solvedWithoutHelp) ? parsed.solvedWithoutHelp : [],
           lastActivityDate: new Date(parsed.lastActivityDate),
         }
       }
@@ -1384,6 +1387,7 @@ const loadUserProgress = (): UserProgress => {
   return {
     userId: "user1",
     solvedProblems: [],
+    solvedWithoutHelp: [],
     currentLevel: 1,
     totalSolved: 0,
     lastActivityDate: new Date(),
@@ -1514,6 +1518,8 @@ export default function PlaywrightLearningApp() {
   const [showFolderSelectionModal, setShowFolderSelectionModal] = useState(false)
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
   const [progressTab, setProgressTab] = useState<"category" | "folder">("category")
+  // 進捗集計モード（すべて or 自力のみ）
+  const [progressCountMode, setProgressCountMode] = useState<"all" | "self">("all")
 
   // 新しい統合学習開始モーダル用の状態
   const [showUnifiedStartModal, setShowUnifiedStartModal] = useState(false)
@@ -1874,25 +1880,39 @@ export default function PlaywrightLearningApp() {
           ? prev.dailyActivity.map((a) => (a.date === today ? { ...a, problemsSolved: a.problemsSolved + 1 } : a))
           : [...prev.dailyActivity, { date: today, problemsSolved: 1 }]
 
-        if (!currentSession.answersShown.has(currentProblem.id)) {
+        // 自力/非自力を区別せず、未クリアの一意問題のみカウント
+        if (!prev.solvedProblems.includes(currentProblem.id)) {
           const newSolvedProblems = [...prev.solvedProblems, currentProblem.id]
           const newTotalSolved = newSolvedProblems.length
           const newLevel = calculateLevel(newTotalSolved)
 
+          // 「自力のみ」判定: この正解の直前に解答比較を見ていなければ自力とみなす
+          const isSelfSolvedNow = !currentSession.answersShown.has(currentProblem.id)
+          const newSolvedWithoutHelp = isSelfSolvedNow && !prev.solvedWithoutHelp.includes(currentProblem.id)
+            ? [...prev.solvedWithoutHelp, currentProblem.id]
+            : prev.solvedWithoutHelp
+
           return {
             ...prev,
             solvedProblems: newSolvedProblems,
+            solvedWithoutHelp: newSolvedWithoutHelp,
             totalSolved: newTotalSolved,
             currentLevel: newLevel,
             lastActivityDate: new Date(),
             dailyActivity: updatedDailyActivity,
           }
-        } else {
-          return {
-            ...prev,
-            lastActivityDate: new Date(),
-            dailyActivity: updatedDailyActivity,
-          }
+        }
+        // 既にクリア済みでも、本回が自力であれば自力フラグを付与
+        const isSelfSolvedNow = !currentSession.answersShown.has(currentProblem.id)
+        const updatedSolvedWithoutHelp = isSelfSolvedNow && !prev.solvedWithoutHelp.includes(currentProblem.id)
+          ? [...prev.solvedWithoutHelp, currentProblem.id]
+          : prev.solvedWithoutHelp
+
+        return {
+          ...prev,
+          solvedWithoutHelp: updatedSolvedWithoutHelp,
+          lastActivityDate: new Date(),
+          dailyActivity: updatedDailyActivity,
         }
       })
 
@@ -2292,6 +2312,7 @@ export default function PlaywrightLearningApp() {
       const resetData: UserProgress = {
         userId: "user1",
         solvedProblems: [],
+        solvedWithoutHelp: [],
         currentLevel: 1,
         totalSolved: 0,
         lastActivityDate: new Date(),
@@ -2586,6 +2607,23 @@ https://www.playwright-study-site.org/`
                     >
                       フォルダ別
                     </Button>
+                    <div className="w-px h-6 bg-gray-200 mx-1" />
+                    <Button
+                      variant={progressCountMode === "all" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setProgressCountMode("all")}
+                      title="解答比較を表示してから正解した問題も進捗に含めます"
+                    >
+                      解答を見たものも含める
+                    </Button>
+                    <Button
+                      variant={progressCountMode === "self" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setProgressCountMode("self")}
+                      title="解答比較を表示した問題は進捗に含めません（自力クリアのみ）"
+                    >
+                      解答を見たものは含めない
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -2594,10 +2632,11 @@ https://www.playwright-study-site.org/`
                   // カテゴリ別進捗
                   (() => {
                     // カテゴリステートから全カテゴリを取得（問題がなくても表示）
+                    const solvedList = progressCountMode === "self" ? userProgress.solvedWithoutHelp : userProgress.solvedProblems
                     return categories.map((category) => {
                       const categoryProblems = problems.filter((p) => p.category === category)
                       const solvedInCategory = categoryProblems.filter((p) =>
-                        userProgress.solvedProblems.includes(p.id)
+                        solvedList.includes(p.id)
                       ).length
                       const percentage = categoryProblems.length > 0
                         ? Math.round((solvedInCategory / categoryProblems.length) * 100)
@@ -2622,10 +2661,11 @@ https://www.playwright-study-site.org/`
                 ) : (
                   // フォルダ別進捗
                   (() => {
+                    const solvedList = progressCountMode === "self" ? userProgress.solvedWithoutHelp : userProgress.solvedProblems
                     return folders.map((folder) => {
                       const folderProblems = problems.filter((p) => p.folderId === folder.id)
                       const solvedInFolder = folderProblems.filter((p) =>
-                        userProgress.solvedProblems.includes(p.id)
+                        solvedList.includes(p.id)
                       ).length
                       const percentage = folderProblems.length > 0
                         ? Math.round((solvedInFolder / folderProblems.length) * 100)
