@@ -2319,7 +2319,7 @@ export default function PlaywrightLearningApp() {
 ⭐ 現在のレベル: Lv.${userProgress.currentLevel}
 🎯 次の目標: レベル${userProgress.currentLevel + 1}まであと${nextLevelProblems}問
 
-#Playwright #プログラミング学習 #E2Eテスト`
+https://www.playwright-study-site.org/`
   }
 
   // Twitterでシェア
