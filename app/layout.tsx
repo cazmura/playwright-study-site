@@ -4,7 +4,7 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Playwright 学習サイト',
+  title: 'Playwright 学習ツール',
   description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール',
   keywords: ['Playwright', 'E2Eテスト', 'プログラミング学習', 'テスト自動化', 'AI問題生成'],
   authors: [{ name: 'Playwright学習サイト' }],
@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'ja_JP',
     url: 'https://www.playwright-study-site.org',
-    title: 'Playwright 学習サイト',
+    title: 'Playwright 学習ツール',
     description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール',
-    siteName: 'Playwright 学習サイト',
+    siteName: 'Playwright 学習ツール',
   },
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Playwright 学習サイト',
+    title: 'Playwright 学習ツール',
     description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール',
   },
 
