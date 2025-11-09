@@ -103,12 +103,9 @@ interface LastLearningSettings {
 
 // 出題方法の選択肢を定義
 const questionOrderOptions: QuestionOrder[] = [
+  { type: "unlearned-first", label: "未学習優先" },
   { type: "random", label: "ランダム" },
-  { type: "unlearned-first", label: "未学習から優先" },
-  { type: "learned-first", label: "学習済みから優先" },
-  { type: "easy-first", label: "学習済みから優先" }, // duplicate, will be removed later if intended
-  { type: "easy-first", label: "難易度が低いものから優先" },
-  { type: "hard-first", label: "難易度が高いものから優先" },
+  { type: "learned-first", label: "復習モード" },
 ]
 
 // デフォルトフォルダ
@@ -121,20 +118,9 @@ const defaultFolder: FolderType = {
   updatedAt: new Date(),
 }
 
-// AI生成問題用フォルダ（削除不可）
-const aiGeneratedFolder: FolderType = {
-  id: "ai-generated",
-  name: "AI生成問題",
-  description: "AIによって自動生成された問題",
-  color: "bg-green-100",
-  createdAt: new Date(),
-  updatedAt: new Date(),
-}
-
 // サンプルフォルダデータ
 const sampleFolders: FolderType[] = [
   defaultFolder,
-  aiGeneratedFolder,
   {
     id: "basic",
     name: "基本操作",
@@ -386,8 +372,8 @@ const AnswerComparison = ({
   onClose: () => void
 }) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-6xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <Card className="w-full max-w-6xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>解答比較</CardTitle>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -1323,10 +1309,6 @@ const loadFolders = (): FolderType[] => {
         if (!folders.find((f: FolderType) => f.id === "default")) {
           folders.unshift(defaultFolder)
         }
-        // AI生成フォルダが存在しない場合は追加
-        if (!folders.find((f: FolderType) => f.id === "ai-generated")) {
-          folders.splice(1, 0, aiGeneratedFolder)
-        }
         return folders
       }
     } catch (error) {
@@ -1444,8 +1426,6 @@ const saveLastLearningSettings = (settings: LastLearningSettings) => {
 }
 
 // モバイル端末検出用のhook
-// The original useIsMobile hook was removed because it was redeclared.
-// This is the corrected version.
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false)
 
@@ -2015,11 +1995,6 @@ export default function PlaywrightLearningApp() {
       return
     }
 
-    if (id === "ai-generated") {
-      alert("AI生成問題フォルダは削除できません。")
-      return
-    }
-
     const problemsInFolder = problems.filter((p) => p.folderId === id)
     if (problemsInFolder.length > 0) {
       if (
@@ -2103,20 +2078,140 @@ export default function PlaywrightLearningApp() {
     }
   }
 
-  const handleAIProblemGenerated = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
-    const newProblem: Problem = {
-      ...problemData,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Generate a more unique ID
-      folderId: "ai-generated", // AI生成問題は必ずai-generatedフォルダに格納
-      createdAt: new Date(),
-      updatedAt: new Date(),
+  const handleAIProblemGenerated = (
+    problemOrProblems:
+      | Omit<Problem, "id" | "createdAt" | "updatedAt">
+      | { problems: Array<Omit<Problem, "id" | "createdAt" | "updatedAt">> },
+  ) => {
+    // 複数問題の場合と単一問題の場合を判定
+    const isMultiple = "problems" in problemOrProblems
+    const problemsList = isMultiple ? problemOrProblems.problems : [problemOrProblems]
+
+    if (problemsList.length === 0) return
+
+    // 最初の問題のフォルダIDとカテゴリを確認（すべて同じフォルダ・カテゴリに保存される想定）
+    const targetFolderId = problemsList[0].folderId
+    const targetCategory = problemsList[0].category
+    let finalFolderId = targetFolderId
+    let finalCategory = targetCategory
+    let finalFolderName: string | null = null // 新規作成または確定したフォルダ名を保持
+
+    // フォルダIDの検証（1回のみ）
+    const folderExists = folders.some((f) => f.id === targetFolderId)
+
+    if (!folderExists) {
+      // フォルダが存在しない場合、ユーザーに確認
+      const useDefault = confirm(
+        `指定されたフォルダが見つかりませんでした。\n\n「OK」を押すと「未分類」フォルダに保存します。\n「キャンセル」を押すと新しいフォルダを作成します。`
+      )
+
+      if (useDefault) {
+        // デフォルトフォルダに保存
+        finalFolderId = "default"
+        finalFolderName = "未分類"
+      } else {
+        // 新しいフォルダを作成
+        const folderName = prompt("新しいフォルダ名を入力してください:")
+
+        if (folderName && folderName.trim()) {
+          // 新しいフォルダを作成
+          const newFolder: FolderType = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            name: folderName.trim(),
+            description: "AI問題生成時に作成されたフォルダ",
+            color: "bg-purple-100",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+
+          const updatedFolders = [...folders, newFolder]
+          setFolders(updatedFolders)
+          saveFolders(updatedFolders)
+
+          // 新しいフォルダのIDと名前を使用
+          finalFolderId = newFolder.id
+          finalFolderName = newFolder.name
+        } else {
+          // フォルダ名が入力されなかった場合はデフォルトフォルダに保存
+          alert("フォルダ名が入力されなかったため、「未分類」フォルダに保存します。")
+          finalFolderId = "default"
+          finalFolderName = "未分類"
+        }
+      }
+    } else {
+      // 既存のフォルダを使用
+      finalFolderName = folders.find((f) => f.id === finalFolderId)?.name || null
     }
 
-    const updatedProblems = [...problems, newProblem]
+    // カテゴリの検証と作成（1回のみ）
+    const categoryExists = categories.includes(targetCategory)
+
+    if (!categoryExists && targetCategory && targetCategory.trim()) {
+      // カテゴリが存在しない場合、ユーザーに確認
+      const createCategory = confirm(
+        `カテゴリ「${targetCategory}」が見つかりませんでした。\n\n新しいカテゴリとして作成しますか？\n\n「OK」で作成、「キャンセル」で既存のカテゴリから選択します。`
+      )
+
+      if (createCategory) {
+        // 新しいカテゴリを作成
+        addCategory(targetCategory)
+        finalCategory = targetCategory
+      } else {
+        // 既存のカテゴリから選択（カテゴリがある場合）
+        if (categories.length > 0) {
+          const categoryOptions = categories.map((c, i) => `${i + 1}. ${c}`).join("\n")
+          const selection = prompt(
+            `既存のカテゴリから選択してください（番号を入力）:\n\n${categoryOptions}\n\nまたは、新しいカテゴリ名を直接入力してください:`,
+          )
+
+          if (selection) {
+            const selectionNum = parseInt(selection)
+            if (!isNaN(selectionNum) && selectionNum > 0 && selectionNum <= categories.length) {
+              // 番号で選択
+              finalCategory = categories[selectionNum - 1]
+            } else if (selection.trim()) {
+              // 新しいカテゴリ名を入力
+              addCategory(selection.trim())
+              finalCategory = selection.trim()
+            } else {
+              finalCategory = targetCategory
+            }
+          } else {
+            // キャンセルされた場合は元のカテゴリを使用
+            finalCategory = targetCategory
+          }
+        } else {
+          // カテゴリが1つもない場合は自動的に作成
+          addCategory(targetCategory)
+          finalCategory = targetCategory
+        }
+      }
+    }
+
+    // 全ての問題を作成
+    const newProblems: Problem[] = problemsList.map((problemData, index) => ({
+      ...problemData,
+      folderId: finalFolderId, // 確定したフォルダIDを使用
+      category: finalCategory, // 確定したカテゴリを使用
+      id: (Date.now() + index).toString() + Math.random().toString(36).substr(2, 9),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }))
+
+    const updatedProblems = [...problems, ...newProblems]
     setProblems(updatedProblems)
     saveProblems(updatedProblems)
 
-    // toastは表示しない（AIチャット内で完結するため）
+    // フォルダ名を取得（新規作成時はfinalFolderNameに保持されている）
+    const displayFolderName = finalFolderName || folders.find((f) => f.id === finalFolderId)?.name || "未分類"
+
+    // ユーザーに結果を通知
+    const message = `✅ 問題を作成しました\n\n📁 フォルダ: ${displayFolderName}\n🏷️ カテゴリ: ${finalCategory}\n📝 問題数: ${newProblems.length}件`
+    alert(message)
+
+    console.log(
+      `[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId} (${displayFolderName}) with category ${finalCategory}`,
+    )
   }
 
   const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {
@@ -2224,7 +2319,7 @@ export default function PlaywrightLearningApp() {
 ⭐ 現在のレベル: Lv.${userProgress.currentLevel}
 🎯 次の目標: レベル${userProgress.currentLevel + 1}まであと${nextLevelProblems}問
 
-#Playwright #プログラミング学習 #E2Eテスト`
+https://www.playwright-study-site.org/`
   }
 
   // Twitterでシェア
@@ -2258,91 +2353,72 @@ export default function PlaywrightLearningApp() {
     saveSettings(newSettings)
   }
 
-  // モバイル端末の場合は警告画面を表示
-  if (isMobile) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <div className="text-6xl mb-4">💻</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">PC推奨</h2>
-            <p className="text-gray-600 mb-6">
-              このアプリケーションはコード入力が必要なため、PC（デスクトップ・ノートパソコン）でのご利用を推奨します。
-            </p>
-            <div className="bg-yellow-50 p-4 rounded-lg mb-6">
-              <h3 className="font-semibold text-yellow-800 mb-2">推奨環境</h3>
-              <ul className="text-yellow-700 text-sm space-y-1 text-left">
-                <li>• デスクトップPC または ノートパソコン</li>
-                <li>• Chrome, Firefox, Safari, Edge</li>
-                <li>• 画面幅: 1024px以上</li>
-                <li>• キーボード入力可能</li>
-              </ul>
-            </div>
-            <Button onClick={() => window.location.reload()} className="w-full">
-              再読み込み
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-8">
-              <h1 className="text-xl font-bold text-gray-900">Playwright学習アプリ</h1>
-              <nav className="flex gap-4">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between py-2 sm:h-16">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-8 w-full sm:w-auto">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900">Playwright学習アプリ</h1>
+              <nav className="flex flex-wrap gap-1 sm:gap-2 justify-center">
                 <Button
                   variant={currentView === "dashboard" ? "default" : "ghost"}
                   onClick={() => setCurrentView("dashboard")}
+                  size="sm"
+                  className="text-xs sm:text-sm"
                 >
-                  <Trophy size={16} className="mr-2" />
-                  ダッシュボード
+                  <span className="hidden sm:inline">ダッシュボード</span>
+                  <span className="sm:hidden">ダッシュ</span>
                 </Button>
-                <Button variant={currentView === "learning" ? "default" : "ghost"} onClick={startNewSession}>
-                  <BookOpen size={16} className="mr-2" />
-                  学習開始
+                <Button
+                  variant={currentView === "learning" ? "default" : "ghost"}
+                  onClick={startNewSession}
+                  size="sm"
+                  className="text-xs sm:text-sm"
+                >
+                  学習
                 </Button>
                 <Button
                   variant={currentView === "problems" ? "default" : "ghost"}
                   onClick={() => setCurrentView("problems")}
+                  size="sm"
+                  className="text-xs sm:text-sm"
                 >
-                  <FileText size={16} className="mr-2" /> {/* Update: Changed Settings to FileText */}
-                  問題管理
+                  問題
                 </Button>
                 <Button
                   variant={currentView === "settings" ? "default" : "ghost"}
                   onClick={() => setCurrentView("settings")}
+                  size="sm"
+                  className="text-xs sm:text-sm"
                 >
-                  <Cog size={16} className="mr-2" />
                   設定
                 </Button>
                 <Button
                   variant={currentView === "manual" ? "default" : "ghost"}
                   onClick={() => setCurrentView("manual")}
+                  size="sm"
+                  className="text-xs sm:text-sm hidden sm:inline-flex"
                 >
-                  <BookOpen size={16} className="mr-2" />
                   マニュアル
                 </Button>
                 <Button
                   variant="ghost"
                   onClick={() => setShowTermsModal(true)}
                   size="sm"
+                  className="text-xs sm:text-sm hidden sm:inline-flex"
                 >
                   利用規約
                 </Button>
               </nav>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className="text-sm font-medium text-gray-700">
+            <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="text-xs sm:text-sm font-medium text-gray-700">
                   🔥 {currentStreak}日
                 </div>
-                <div className="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                <div className="text-xs sm:text-sm font-medium bg-blue-100 text-blue-700 px-2 sm:px-3 py-1 rounded-full">
                   Lv.{userProgress.currentLevel}
                 </div>
               </div>
@@ -2350,6 +2426,23 @@ export default function PlaywrightLearningApp() {
           </div>
         </div>
       </header>
+
+      {/* モバイルユーザー向けPC推奨バナー（問題セッション以外で表示） */}
+      {isMobile && currentView !== "learning" && (
+        <div className="bg-yellow-50 border-b border-yellow-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">💻</div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-yellow-800 mb-1">PC環境を推奨</p>
+                <p className="text-xs text-yellow-700">
+                  本アプリはPC環境での利用を想定して作られているため、モバイル端末でのご利用は非推奨です。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* メインコンテンツ */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -2486,8 +2579,8 @@ export default function PlaywrightLearningApp() {
                 {progressTab === "category" ? (
                   // カテゴリ別進捗
                   (() => {
-                    const categories = Array.from(new Set(problems.map((p) => p.category)))
-                    return categories.slice(0, 5).map((category) => {
+                    // カテゴリステートから全カテゴリを取得（問題がなくても表示）
+                    return categories.map((category) => {
                       const categoryProblems = problems.filter((p) => p.category === category)
                       const solvedInCategory = categoryProblems.filter((p) =>
                         userProgress.solvedProblems.includes(p.id)
@@ -2634,6 +2727,27 @@ export default function PlaywrightLearningApp() {
                 <p className="text-gray-600 mb-6">素晴らしい！5問すべて正解しました！</p>
                 <div className="flex gap-4 justify-center">
                   <Button onClick={startNewSession}>新しいセッションを開始</Button>
+                  <Button variant="outline" onClick={() => setCurrentView("dashboard")}>
+                    ダッシュボードに戻る
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {currentView === "learning" && !currentSession && (
+          <div className="text-center space-y-6">
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="text-6xl mb-4">📚</div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">学習セッションを開始しましょう</h2>
+                <p className="text-gray-600 mb-6">下のボタンから新しい学習セッションを開始できます</p>
+                <div className="flex gap-4 justify-center">
+                  <Button onClick={startNewSession} size="lg">
+                    <Play size={20} className="mr-2" />
+                    学習開始
+                  </Button>
                   <Button variant="outline" onClick={() => setCurrentView("dashboard")}>
                     ダッシュボードに戻る
                   </Button>
@@ -2819,33 +2933,6 @@ export default function PlaywrightLearningApp() {
           <div className="space-y-8">
             <SettingsManager settings={settings} onUpdate={updateSettings} />
 
-            {/* Ko-fi サポートセクション */}
-            <Card>
-              <CardHeader>
-                <CardTitle>☕ このアプリを支援</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-gray-700">
-                  もしこのアプリが役に立ったと感じていただけたら、開発を支援していただけると嬉しいです！
-                </p>
-                <div className="text-center">
-                  <a
-                    href={`https://ko-fi.com/${process.env.NEXT_PUBLIC_KOFI_USERNAME || "yourusername"}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block"
-                  >
-                    <img
-                      src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
-                      alt="Buy Me a Coffee at ko-fi.com"
-                      className="h-12 hover:opacity-80 transition-opacity"
-                    />
-                  </a>
-                </div>
-                <p className="text-gray-500 text-xs text-center">Ko-fiは手数料無料の支援プラットフォームです</p>
-              </CardContent>
-            </Card>
-
             {/* 学習進捗リセット */}
             <Card>
               <CardHeader>
@@ -2908,41 +2995,45 @@ export default function PlaywrightLearningApp() {
                 </div>
 
                 <div>
-                  <h3 className="font-semibold mb-2">🎯 曖昧な要件のブレイクダウン</h3>
+                  <h3 className="font-semibold mb-2">📁 フォルダと問題数の指定</h3>
                   <ul className="text-gray-600 space-y-1">
-                    <li>• 「Playwrightを学びたい」のような抽象的な要望でもOK</li>
-                    <li>• AIが質問をして、学びたい内容を具体化</li>
-                    <li>• 難易度やシナリオを確認して、最適な問題を提案</li>
+                    <li>• 保存先のフォルダと作成する問題数を指定できます</li>
+                    <li>• 例: 「基本操作フォルダに5問作成して」</li>
+                    <li>• フォルダ名や問題数が指定されない場合、AIが確認します</li>
+                    <li>• 指定されたフォルダが存在しない場合は、新規作成または未分類フォルダを選択可能</li>
                   </ul>
                 </div>
 
                 <div>
                   <h3 className="font-semibold mb-2">📚 複数問題の一括生成</h3>
                   <ul className="text-gray-600 space-y-1">
-                    <li>• 1つの要望から基礎→応用の流れで複数の問題を作成可能</li>
-                    <li>• 問題作成後、関連する追加問題を提案</li>
+                    <li>• 一度に複数の問題を作成可能（基礎→応用の流れ）</li>
+                    <li>• 指定した件数に応じて、段階的な問題セットを自動生成</li>
                     <li>• 体系的な学習プランを自動構築</li>
                   </ul>
                 </div>
 
                 <div>
-                  <h3 className="font-semibold mb-2">🗂️ 自動フォルダ分類</h3>
+                  <h3 className="font-semibold mb-2">🔍 柔軟なフォルダ管理</h3>
                   <ul className="text-gray-600 space-y-1">
-                    <li>• AI生成問題は「AI生成問題」フォルダに自動保存</li>
-                    <li>• このフォルダは削除不可で、常に利用可能</li>
-                    <li>• 手動作成の問題と明確に区別して管理</li>
+                    <li>• 指定したフォルダが存在しない場合、その場で新規作成可能</li>
+                    <li>• または「未分類」フォルダに保存を選択可能</li>
+                    <li>• 自動作成されたフォルダは紫色で表示され、区別しやすい</li>
                   </ul>
                 </div>
 
                 <div className="bg-blue-50 p-3 rounded">
                   <h3 className="font-semibold text-blue-800 mb-2">💡 使用例</h3>
                   <div className="text-blue-700 text-sm space-y-2">
-                    <p><strong>例1（曖昧な要望）:</strong></p>
+                    <p><strong>例1（フォルダと件数を指定）:</strong></p>
+                    <p className="pl-4">ユーザー: 「基本操作フォルダにボタンクリックの問題を5問作って」</p>
+                    <p className="pl-4">AI: 基本操作フォルダに5問の問題を作成</p>
+                    <p className="mt-2"><strong>例2（曖昧な要望）:</strong></p>
                     <p className="pl-4">ユーザー: 「Playwrightを勉強したい」</p>
-                    <p className="pl-4">AI: 「どの分野を学習したいですか？」→ ユーザーが選択 → 問題作成</p>
-                    <p className="mt-2"><strong>例2（明確な要望）:</strong></p>
-                    <p className="pl-4">ユーザー: 「ボタンをクリックする方法を学びたい」</p>
-                    <p className="pl-4">AI: 即座に問題を作成 + 関連問題を提案</p>
+                    <p className="pl-4">AI: 「どのフォルダに何問作成しますか？どの分野を学習したいですか？」→ 確認後に問題作成</p>
+                    <p className="mt-2"><strong>例3（存在しないフォルダを指定）:</strong></p>
+                    <p className="pl-4">ユーザー: 「テストフォルダに3問」</p>
+                    <p className="pl-4">システム: フォルダが見つからない → 新規作成 or 未分類に保存を選択</p>
                   </div>
                 </div>
               </CardContent>
@@ -3235,8 +3326,8 @@ export default function PlaywrightLearningApp() {
 
         {/* フォルダ選択モーダル */}
         {showFolderSelectionModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowFolderSelectionModal(false)}>
+            <Card className="w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle>学習するフォルダを選択</CardTitle>
               </CardHeader>
@@ -3283,8 +3374,8 @@ export default function PlaywrightLearningApp() {
 
         {/* 出題方法選択モーダル */}
         {showQuestionOrderModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowQuestionOrderModal(false)}>
+            <Card className="w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle>出題方法を選択</CardTitle>
               </CardHeader>
@@ -3300,11 +3391,9 @@ export default function PlaywrightLearningApp() {
                       <div>
                         <div className="font-medium">{option.label}</div>
                         <div className="text-sm text-gray-600 mt-1">
-                          {option.type === "random" && "問題をランダムな順序で出題します"}
-                          {option.type === "unlearned-first" && "未学習の問題を優先的に出題します"}
-                          {option.type === "learned-first" && "学習済みの問題を優先的に出題します（復習向け）"}
-                          {option.type === "easy-first" && "難易度の低い問題から順番に出題します"}
-                          {option.type === "hard-first" && "難易度の高い問題から順番に出題します"}
+                          {option.type === "unlearned-first" && "まだ解いていない問題を優先的に出題します（デフォルト推奨）"}
+                          {option.type === "random" && "全ての問題をランダムな順序で出題します"}
+                          {option.type === "learned-first" && "既に学習した問題を優先的に出題します（復習向け）"}
                         </div>
                       </div>
                     </Button>
@@ -3322,8 +3411,8 @@ export default function PlaywrightLearningApp() {
 
         {/* 統合学習開始モーダル */}
         {showUnifiedStartModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowUnifiedStartModal(false)}>
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle>学習範囲を選択</CardTitle>
               </CardHeader>
@@ -3449,10 +3538,8 @@ export default function PlaywrightLearningApp() {
                 {/* 出題方法選択 */}
                 <div>
                   <Label className="text-base font-semibold mb-3 block">出題方法</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {questionOrderOptions.filter((option, index, self) =>
-                      index === self.findIndex((o) => o.type === option.type)
-                    ).map((option) => (
+                  <div className="grid grid-cols-3 gap-2">
+                    {questionOrderOptions.map((option) => (
                       <Button
                         key={option.type}
                         variant={questionOrderNew === option.type ? "default" : "outline"}
@@ -3500,8 +3587,8 @@ export default function PlaywrightLearningApp() {
 
       {/* フォルダ追加モーダル */}
       {showAddFolderModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowAddFolderModal(false)}>
+          <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>新しいフォルダを追加</CardTitle>
             </CardHeader>
@@ -3554,8 +3641,8 @@ export default function PlaywrightLearningApp() {
 
       {/* フォルダ編集モーダル */}
       {showEditFolderModal && editingFolder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => { setShowEditFolderModal(false); setEditingFolder(null); }}>
+          <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>フォルダを編集</CardTitle>
             </CardHeader>
@@ -3617,8 +3704,8 @@ export default function PlaywrightLearningApp() {
 
       {/* 問題追加モーダル */}
       {showAddProblemModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <Card className="w-full max-w-2xl my-8">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => { setShowAddProblemModal(false); setSelectedFolderForAdd(""); setNewHints([]); setNewAlternatives([]); }}>
+          <Card className="w-full max-w-2xl my-8" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>新しい問題を追加</CardTitle>
             </CardHeader>
@@ -3779,8 +3866,8 @@ export default function PlaywrightLearningApp() {
 
       {/* 問題編集モーダル */}
       {showEditProblemModal && editingProblem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <Card className="w-full max-w-2xl my-8">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => { setShowEditProblemModal(false); setEditingProblem(null); setEditHints([]); setEditAlternatives([]); }}>
+          <Card className="w-full max-w-2xl my-8" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>問題を編集</CardTitle>
             </CardHeader>
@@ -3944,8 +4031,8 @@ export default function PlaywrightLearningApp() {
 
       {/* カテゴリ管理モーダル */}
       {showCategoryManagementModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-          <Card className="w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4" onClick={() => { setShowCategoryManagementModal(false); setNewCategoryName(""); }}>
+          <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>カテゴリ管理</CardTitle>
             </CardHeader>
@@ -4024,8 +4111,8 @@ export default function PlaywrightLearningApp() {
 
       {/* 利用規約モーダル */}
       {showTermsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4" onClick={() => { if (hasAgreedToTerms) setShowTermsModal(false); }}>
+          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>利用規約</CardTitle>
             </CardHeader>
@@ -4101,7 +4188,7 @@ export default function PlaywrightLearningApp() {
 
       {/* ToasterとAIChatWidgetを追加 */}
       <Toaster />
-      <AIChatWidget onProblemGenerated={handleAIProblemGenerated} />
+      <AIChatWidget onProblemGenerated={handleAIProblemGenerated} folders={folders} categories={categories} />
     </div>
   )
 }

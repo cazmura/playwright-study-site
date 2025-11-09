@@ -5,8 +5,39 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Playwright 学習サイト',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール。AI機能で自動問題生成。',
+  keywords: ['Playwright', 'E2Eテスト', 'プログラミング学習', 'テスト自動化', 'AI問題生成'],
+  authors: [{ name: 'Playwright学習サイト' }],
+  creator: 'Playwright学習サイト',
+  publisher: 'Playwright学習サイト',
+  metadataBase: new URL('https://www.playwright-study-site.org'),
+
+  openGraph: {
+    type: 'website',
+    locale: 'ja_JP',
+    url: 'https://www.playwright-study-site.org',
+    title: 'Playwright 学習サイト',
+    description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール。AI機能で自動問題生成。',
+    siteName: 'Playwright 学習サイト',
+  },
+
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Playwright 学習サイト',
+    description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール。AI機能で自動問題生成。',
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
 }
 
 export default function RootLayout({
