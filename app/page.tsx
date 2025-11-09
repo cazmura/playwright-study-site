@@ -252,29 +252,34 @@ const getCharacterInfo = (level: number) => {
 
 // 学習カレンダーコンポーネント
 const LearningCalendar = ({ dailyActivity }: { dailyActivity: { date: string; problemsSolved: number }[] }) => {
-  const today = new Date()
-  const days = []
+  const [weeks, setWeeks] = useState<Array<Array<{ date: string; count: number; intensity: number }>>>([])
 
-  // 過去12週間のデータを生成
-  for (let i = 83; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    const dateStr = date.toISOString().split("T")[0]
-    const activity = dailyActivity.find((a) => a.date === dateStr)
-    const count = activity ? activity.problemsSolved : 0
+  useEffect(() => {
+    const today = new Date()
+    const days = []
 
-    days.push({
-      date: dateStr,
-      count,
-      intensity: count === 0 ? 0 : Math.min(Math.ceil(count / 2), 4),
-    })
-  }
+    // 過去12週間のデータを生成
+    for (let i = 83; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      const dateStr = date.toISOString().split("T")[0]
+      const activity = dailyActivity.find((a) => a.date === dateStr)
+      const count = activity ? activity.problemsSolved : 0
 
-  // 週単位でグループ化
-  const weeks = []
-  for (let i = 0; i < days.length; i += 7) {
-    weeks.push(days.slice(i, i + 7))
-  }
+      days.push({
+        date: dateStr,
+        count,
+        intensity: count === 0 ? 0 : Math.min(Math.ceil(count / 2), 4),
+      })
+    }
+
+    // 週単位でグループ化
+    const newWeeks = []
+    for (let i = 0; i < days.length; i += 7) {
+      newWeeks.push(days.slice(i, i + 7))
+    }
+    setWeeks(newWeeks)
+  }, [dailyActivity])
 
   return (
     <Card>
@@ -1538,8 +1543,50 @@ export default function PlaywrightLearningApp() {
   // ストリーク（連続学習日数）の状態
   const [currentStreak, setCurrentStreak] = useState(0)
 
+  // 今日の日付（クライアント側のみ）
+  const [todayDate, setTodayDate] = useState("")
+
+  // 今週の解答数（クライアント側のみ）
+  const [weeklyProblems, setWeeklyProblems] = useState(0)
+
   // SNSシェアの表示状態
   const [showShareOptions, setShowShareOptions] = useState(false)
+
+  // フォルダ・問題管理の状態
+  const [expandedFolders, setExpandedFolders] = useState<string[]>([])
+  const [showAddFolderModal, setShowAddFolderModal] = useState(false)
+  const [showEditFolderModal, setShowEditFolderModal] = useState(false)
+  const [showAddProblemModal, setShowAddProblemModal] = useState(false)
+  const [showEditProblemModal, setShowEditProblemModal] = useState(false)
+  const [showCategoryManagementModal, setShowCategoryManagementModal] = useState(false)
+  const [editingFolder, setEditingFolder] = useState<FolderType | null>(null)
+  const [editingProblem, setEditingProblem] = useState<Problem | null>(null)
+  const [selectedFolderForAdd, setSelectedFolderForAdd] = useState<string>("")
+
+  // 問題追加・編集時のヒントと代替回答の状態
+  const [newHints, setNewHints] = useState<string[]>([])
+  const [newAlternatives, setNewAlternatives] = useState<string[]>([])
+  const [editHints, setEditHints] = useState<string[]>([])
+  const [editAlternatives, setEditAlternatives] = useState<string[]>([])
+
+  // カテゴリ管理の状態
+  const [newCategoryName, setNewCategoryName] = useState("")
+
+  // 利用規約の状態
+  const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
+
+  // 利用規約の同意状態をチェック（クライアント側のみ）
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const agreed = localStorage.getItem("playwright-learning-terms-agreed")
+      if (agreed === "true") {
+        setHasAgreedToTerms(true)
+      } else {
+        setShowTermsModal(true)
+      }
+    }
+  }, [])
 
   // 前回の設定を読み込む（クライアント側のみ）
   useEffect(() => {
@@ -1553,6 +1600,11 @@ export default function PlaywrightLearningApp() {
     }
   }, [])
 
+  // 今日の日付を設定（クライアント側のみ）
+  useEffect(() => {
+    setTodayDate(new Date().toISOString().split("T")[0])
+  }, [])
+
   // ストリークを計算（クライアント側のみ）
   useEffect(() => {
     let streak = 0
@@ -1562,6 +1614,16 @@ export default function PlaywrightLearningApp() {
       else break
     }
     setCurrentStreak(streak)
+  }, [userProgress.dailyActivity])
+
+  // 今週の解答数を計算（クライアント側のみ）
+  useEffect(() => {
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    const count = userProgress.dailyActivity
+      .filter((a) => new Date(a.date) >= weekAgo)
+      .reduce((sum, a) => sum + a.problemsSolved, 0)
+    setWeeklyProblems(count)
   }, [userProgress.dailyActivity])
 
   // 問題を選択する関数を追加
@@ -2026,6 +2088,21 @@ export default function PlaywrightLearningApp() {
     }
   }
 
+  const handleAddCategory = () => {
+    if (newCategoryName.trim()) {
+      addCategory(newCategoryName.trim())
+      setNewCategoryName("")
+    }
+  }
+
+  const handleAgreeToTerms = () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("playwright-learning-terms-agreed", "true")
+      setHasAgreedToTerms(true)
+      setShowTermsModal(false)
+    }
+  }
+
   const handleAIProblemGenerated = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
     const newProblem: Problem = {
       ...problemData,
@@ -2125,6 +2202,13 @@ export default function PlaywrightLearningApp() {
   }
 
   const character = getCharacterInfo(userProgress.currentLevel)
+
+  // フォルダの開閉切り替え
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((prev) =>
+      prev.includes(folderId) ? prev.filter((id) => id !== folderId) : [...prev, folderId]
+    )
+  }
 
   // SNSシェア用のテキスト生成
   const generateShareText = () => {
@@ -2244,6 +2328,13 @@ export default function PlaywrightLearningApp() {
                   <BookOpen size={16} className="mr-2" />
                   マニュアル
                 </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowTermsModal(true)}
+                  size="sm"
+                >
+                  利用規約
+                </Button>
               </nav>
             </div>
             <div className="flex items-center gap-4">
@@ -2262,7 +2353,19 @@ export default function PlaywrightLearningApp() {
 
       {/* メインコンテンツ */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === "dashboard" && (
+        {!hasAgreedToTerms ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <Card className="w-full max-w-2xl">
+              <CardContent className="p-8 text-center">
+                <div className="text-6xl mb-4">📋</div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">利用規約の確認</h2>
+                <p className="text-gray-600 mb-6">
+                  サービスをご利用いただく前に、利用規約をご確認ください。
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        ) : currentView === "dashboard" && (
           <div className="space-y-6">
             {/* 今日の学習進捗 - 最優先エリア */}
             <Card>
@@ -2275,7 +2378,7 @@ export default function PlaywrightLearningApp() {
                     <div className="text-sm text-gray-600">解答した問題</div>
                     <div className="text-2xl font-bold">
                       {userProgress.dailyActivity.find(
-                        (a) => a.date === new Date().toISOString().split("T")[0]
+                        (a) => a.date === todayDate
                       )?.problemsSolved || 0}問
                     </div>
                   </div>
@@ -2322,13 +2425,7 @@ export default function PlaywrightLearningApp() {
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">今週の解答数</span>
                       <span className="text-lg font-bold">
-                        {(() => {
-                          const weekAgo = new Date()
-                          weekAgo.setDate(weekAgo.getDate() - 7)
-                          return userProgress.dailyActivity
-                            .filter((a) => new Date(a.date) >= weekAgo)
-                            .reduce((sum, a) => sum + a.problemsSolved, 0)
-                        })()}問
+                        {weeklyProblems}問
                       </span>
                     </div>
 
@@ -2347,7 +2444,7 @@ export default function PlaywrightLearningApp() {
                           <div className="flex gap-2">
                             <Button onClick={shareToTwitter} size="sm" className="text-xs bg-blue-500 hover:bg-blue-600">
                               <Share2 size={12} className="mr-1" />
-                              Twitter
+                              X(旧Twitter)
                             </Button>
                             <Button onClick={copyShareText} size="sm" variant="outline" className="text-xs">
                               <Copy size={12} className="mr-1" />
@@ -2547,21 +2644,174 @@ export default function PlaywrightLearningApp() {
         )}
 
         {currentView === "problems" && (
-          <div className="space-y-8">
-            <FolderManager folders={folders} onAdd={addFolder} onEdit={editFolder} onDelete={deleteFolder} />
-            <ProblemManager
-              problems={problems}
-              folders={folders}
-              categories={categories}
-              onAdd={addProblem}
-              onEdit={editProblem}
-              onDelete={deleteProblem}
-              onImport={importProblems}
-              onExport={exportProblems}
-              onNavigateToProblems={() => setCurrentView("problems")}
-              onAddCategory={addCategory}
-              onDeleteCategory={deleteCategory}
-            />
+          <div className="space-y-6">
+            {/* フォルダと問題の統合管理 */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>📁 フォルダと問題の管理</CardTitle>
+                  <div className="flex gap-2">
+                    <Button onClick={() => setShowAddFolderModal(true)} size="sm">
+                      <FolderPlus size={16} className="mr-2" />
+                      フォルダを追加
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {folders.map((folder) => {
+                    const folderProblems = problems.filter((p) => p.folderId === folder.id)
+                    const isExpanded = expandedFolders.includes(folder.id)
+
+                    return (
+                      <Card key={folder.id} className="border-2">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1">
+                              <button
+                                onClick={() => toggleFolder(folder.id)}
+                                className="hover:bg-gray-100 p-1 rounded"
+                              >
+                                {isExpanded ? "▼" : "▶"}
+                              </button>
+                              <div>
+                                <div className="font-semibold">{folder.name}</div>
+                                <div className="text-sm text-gray-500">{folderProblems.length}問</div>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => {
+                                  setShowAddProblemModal(true)
+                                  setSelectedFolderForAdd(folder.id)
+                                }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Plus size={14} className="mr-1" />
+                                問題追加
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  const input = document.createElement("input")
+                                  input.type = "file"
+                                  input.accept = ".json"
+                                  input.onchange = (e) => {
+                                    const file = (e.target as HTMLInputElement).files?.[0]
+                                    if (file) {
+                                      const reader = new FileReader()
+                                      reader.onload = (event) => {
+                                        try {
+                                          const json = JSON.parse(event.target?.result as string)
+                                          // フォルダIDを上書きしてインポート
+                                          const problemsWithFolderId = json.map((p: any) => ({
+                                            ...p,
+                                            folderId: folder.id,
+                                          }))
+                                          importProblems(problemsWithFolderId)
+                                        } catch (error) {
+                                          alert("JSONファイルの読み込みに失敗しました")
+                                        }
+                                      }
+                                      reader.readAsText(file)
+                                    }
+                                  }
+                                  input.click()
+                                }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Upload size={14} className="mr-1" />
+                                インポート
+                              </Button>
+                              <Button
+                                onClick={() => exportProblems(folder.id)}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Download size={14} className="mr-1" />
+                                エクスポート
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  setEditingFolder(folder)
+                                  setShowEditFolderModal(true)
+                                }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Edit2 size={14} />
+                              </Button>
+                              <Button onClick={() => deleteFolder(folder.id)} size="sm" variant="outline">
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+
+                        {isExpanded && (
+                          <CardContent className="pt-0">
+                            {folderProblems.length === 0 ? (
+                              <div className="text-center text-gray-500 py-8">
+                                このフォルダには問題がありません
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {folderProblems.map((problem) => (
+                                  <div
+                                    key={problem.id}
+                                    className="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100"
+                                  >
+                                    <div className="flex-1">
+                                      <div className="font-medium">{problem.title}</div>
+                                      <div className="text-sm text-gray-600">{problem.description}</div>
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        カテゴリ: {problem.category}
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        onClick={() => {
+                                          setEditingProblem(problem)
+                                          setEditHints(problem.hints)
+                                          setEditAlternatives(problem.alternativeAnswers || [])
+                                          setShowEditProblemModal(true)
+                                        }}
+                                        size="sm"
+                                        variant="outline"
+                                      >
+                                        <Edit2 size={14} />
+                                      </Button>
+                                      <Button onClick={() => deleteProblem(problem.id)} size="sm" variant="outline">
+                                        <Trash2 size={14} />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        )}
+                      </Card>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* カテゴリ管理 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">🏷️ カテゴリ管理</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => setShowCategoryManagementModal(true)} variant="outline" className="w-full">
+                  <Cog size={16} className="mr-2" />
+                  カテゴリを管理
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -2576,8 +2826,6 @@ export default function PlaywrightLearningApp() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-gray-700">
-                  このアプリは無料で利用できますが、開発やサーバー維持にはコストがかかります。
-                  <br />
                   もしこのアプリが役に立ったと感じていただけたら、開発を支援していただけると嬉しいです！
                 </p>
                 <div className="text-center">
@@ -2950,16 +3198,11 @@ export default function PlaywrightLearningApp() {
               </CardHeader>
               <CardContent className="text-center space-y-4">
                 <p className="text-gray-700">
-                  このアプリは無料で利用できますが、開発やサーバー維持にはコストがかかります。
-                  <br />
                   もしこのアプリが役に立ったと感じていただけたら、開発を支援していただけると嬉しいです！
                 </p>
                 <div className="bg-blue-50 p-4 rounded">
                   <p className="text-blue-800 text-sm mb-3">💝 サポートしていただくと...</p>
                   <ul className="text-blue-700 text-sm space-y-1 text-left">
-                    <li>• 新機能の開発が促進されます</li>
-                    <li>• バグ修正が迅速に行われます</li>
-                    <li>• サーバーの安定運用が継続できます</li>
                     <li>• AI機能の利用コストをカバーできます</li>
                   </ul>
                 </div>
@@ -3090,7 +3333,7 @@ export default function PlaywrightLearningApp() {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-semibold text-blue-900">前回の設定で続きから</div>
+                        <div className="font-semibold text-blue-900">前回の設定で開始する</div>
                         <div className="text-sm text-blue-700 mt-1">
                           {(() => {
                             const type = selectionType === "folder" ? "フォルダ" : "カテゴリ"
@@ -3254,6 +3497,607 @@ export default function PlaywrightLearningApp() {
           </div>
         )}
       </main>
+
+      {/* フォルダ追加モーダル */}
+      {showAddFolderModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>新しいフォルダを追加</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="folder-name">フォルダ名</Label>
+                <Input
+                  id="folder-name"
+                  placeholder="例: ページ操作"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const input = e.target as HTMLInputElement
+                      if (input.value.trim()) {
+                        addFolder({
+                          name: input.value.trim(),
+                          description: "",
+                          color: "#3B82F6",
+                        })
+                        setShowAddFolderModal(false)
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    const input = document.getElementById("folder-name") as HTMLInputElement
+                    if (input.value.trim()) {
+                      addFolder({
+                        name: input.value.trim(),
+                        description: "",
+                        color: "#3B82F6",
+                      })
+                      setShowAddFolderModal(false)
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  追加
+                </Button>
+                <Button onClick={() => setShowAddFolderModal(false)} variant="outline" className="flex-1">
+                  キャンセル
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* フォルダ編集モーダル */}
+      {showEditFolderModal && editingFolder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>フォルダを編集</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="edit-folder-name">フォルダ名</Label>
+                <Input
+                  id="edit-folder-name"
+                  defaultValue={editingFolder.name}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const input = e.target as HTMLInputElement
+                      if (input.value.trim()) {
+                        editFolder(editingFolder.id, {
+                          name: input.value.trim(),
+                          description: editingFolder.description,
+                          color: editingFolder.color,
+                        })
+                        setShowEditFolderModal(false)
+                        setEditingFolder(null)
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    const input = document.getElementById("edit-folder-name") as HTMLInputElement
+                    if (input.value.trim()) {
+                      editFolder(editingFolder.id, {
+                        name: input.value.trim(),
+                        description: editingFolder.description,
+                        color: editingFolder.color,
+                      })
+                      setShowEditFolderModal(false)
+                      setEditingFolder(null)
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  保存
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowEditFolderModal(false)
+                    setEditingFolder(null)
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  キャンセル
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* 問題追加モーダル */}
+      {showAddProblemModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <Card className="w-full max-w-2xl my-8">
+            <CardHeader>
+              <CardTitle>新しい問題を追加</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="problem-title">タイトル</Label>
+                <Input id="problem-title" placeholder="例: ボタンをクリック" />
+              </div>
+              <div>
+                <Label htmlFor="problem-description">説明</Label>
+                <Textarea id="problem-description" placeholder="問題の説明を入力" rows={3} />
+              </div>
+              <div>
+                <Label htmlFor="problem-code">期待するコード</Label>
+                <Textarea id="problem-code" placeholder="await page.click('#button')" rows={3} />
+              </div>
+              <div>
+                <Label htmlFor="problem-category">カテゴリ</Label>
+                <Select
+                  onValueChange={(value) => {
+                    const select = document.getElementById("problem-category-hidden") as HTMLInputElement
+                    if (select) select.value = value
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="カテゴリを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <input type="hidden" id="problem-category-hidden" />
+              </div>
+              <div>
+                <Label>ヒント</Label>
+                <div className="space-y-2">
+                  {newHints.map((hint, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={hint}
+                        onChange={(e) => {
+                          const updated = [...newHints]
+                          updated[index] = e.target.value
+                          setNewHints(updated)
+                        }}
+                        placeholder={`ヒント ${index + 1}`}
+                      />
+                      <Button
+                        onClick={() => setNewHints(newHints.filter((_, i) => i !== index))}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    onClick={() => setNewHints([...newHints, ""])}
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Plus size={14} className="mr-2" />
+                    ヒントを追加
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label>代替回答</Label>
+                <div className="space-y-2">
+                  {newAlternatives.map((alt, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Textarea
+                        value={alt}
+                        onChange={(e) => {
+                          const updated = [...newAlternatives]
+                          updated[index] = e.target.value
+                          setNewAlternatives(updated)
+                        }}
+                        placeholder={`代替回答 ${index + 1}`}
+                        rows={2}
+                      />
+                      <Button
+                        onClick={() => setNewAlternatives(newAlternatives.filter((_, i) => i !== index))}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    onClick={() => setNewAlternatives([...newAlternatives, ""])}
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Plus size={14} className="mr-2" />
+                    代替回答を追加
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    const title = (document.getElementById("problem-title") as HTMLInputElement).value
+                    const description = (document.getElementById("problem-description") as HTMLTextAreaElement).value
+                    const code = (document.getElementById("problem-code") as HTMLTextAreaElement).value
+                    const category = (document.getElementById("problem-category-hidden") as HTMLInputElement).value
+
+                    const hints = newHints.filter((h) => h.trim() !== "")
+                    const alternatives = newAlternatives.filter((a) => a.trim() !== "")
+
+                    if (title && description && code && category) {
+                      addProblem({
+                        title,
+                        description,
+                        expectedCode: code,
+                        category,
+                        folderId: selectedFolderForAdd || folders[0]?.id || "",
+                        hints,
+                        alternativeAnswers: alternatives,
+                        difficulty: 2,
+                      })
+                      setShowAddProblemModal(false)
+                      setSelectedFolderForAdd("")
+                      setNewHints([])
+                      setNewAlternatives([])
+                    } else {
+                      alert("タイトル、説明、期待するコード、カテゴリは必須です")
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  追加
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowAddProblemModal(false)
+                    setSelectedFolderForAdd("")
+                    setNewHints([])
+                    setNewAlternatives([])
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  キャンセル
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* 問題編集モーダル */}
+      {showEditProblemModal && editingProblem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <Card className="w-full max-w-2xl my-8">
+            <CardHeader>
+              <CardTitle>問題を編集</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="edit-problem-title">タイトル</Label>
+                <Input id="edit-problem-title" defaultValue={editingProblem.title} />
+              </div>
+              <div>
+                <Label htmlFor="edit-problem-description">説明</Label>
+                <Textarea id="edit-problem-description" defaultValue={editingProblem.description} rows={3} />
+              </div>
+              <div>
+                <Label htmlFor="edit-problem-code">期待するコード</Label>
+                <Textarea id="edit-problem-code" defaultValue={editingProblem.expectedCode} rows={3} />
+              </div>
+              <div>
+                <Label htmlFor="edit-problem-category">カテゴリ</Label>
+                <Select
+                  defaultValue={editingProblem.category}
+                  onValueChange={(value) => {
+                    const select = document.getElementById("edit-problem-category-hidden") as HTMLInputElement
+                    if (select) select.value = value
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <input type="hidden" id="edit-problem-category-hidden" defaultValue={editingProblem.category} />
+              </div>
+              <div>
+                <Label>ヒント</Label>
+                <div className="space-y-2">
+                  {editHints.map((hint, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={hint}
+                        onChange={(e) => {
+                          const updated = [...editHints]
+                          updated[index] = e.target.value
+                          setEditHints(updated)
+                        }}
+                        placeholder={`ヒント ${index + 1}`}
+                      />
+                      <Button
+                        onClick={() => setEditHints(editHints.filter((_, i) => i !== index))}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    onClick={() => setEditHints([...editHints, ""])}
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Plus size={14} className="mr-2" />
+                    ヒントを追加
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label>代替回答</Label>
+                <div className="space-y-2">
+                  {editAlternatives.map((alt, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Textarea
+                        value={alt}
+                        onChange={(e) => {
+                          const updated = [...editAlternatives]
+                          updated[index] = e.target.value
+                          setEditAlternatives(updated)
+                        }}
+                        placeholder={`代替回答 ${index + 1}`}
+                        rows={2}
+                      />
+                      <Button
+                        onClick={() => setEditAlternatives(editAlternatives.filter((_, i) => i !== index))}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    onClick={() => setEditAlternatives([...editAlternatives, ""])}
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Plus size={14} className="mr-2" />
+                    代替回答を追加
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    const title = (document.getElementById("edit-problem-title") as HTMLInputElement).value
+                    const description = (document.getElementById("edit-problem-description") as HTMLTextAreaElement)
+                      .value
+                    const code = (document.getElementById("edit-problem-code") as HTMLTextAreaElement).value
+                    const categoryInput = document.getElementById("edit-problem-category-hidden") as HTMLInputElement
+                    const category = categoryInput ? categoryInput.value : editingProblem.category
+
+                    const hints = editHints.filter((h) => h.trim() !== "")
+                    const alternatives = editAlternatives.filter((a) => a.trim() !== "")
+
+                    if (title && description && code && category) {
+                      editProblem(editingProblem.id, {
+                        title,
+                        description,
+                        expectedCode: code,
+                        category,
+                        folderId: editingProblem.folderId,
+                        hints,
+                        alternativeAnswers: alternatives,
+                        difficulty: editingProblem.difficulty,
+                      })
+                      setShowEditProblemModal(false)
+                      setEditingProblem(null)
+                      setEditHints([])
+                      setEditAlternatives([])
+                    } else {
+                      alert("タイトル、説明、期待するコード、カテゴリは必須です")
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  保存
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowEditProblemModal(false)
+                    setEditingProblem(null)
+                    setEditHints([])
+                    setEditAlternatives([])
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  キャンセル
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* カテゴリ管理モーダル */}
+      {showCategoryManagementModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>カテゴリ管理</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* 新規カテゴリ追加 */}
+                <div>
+                  <Label htmlFor="newCategory">新しいカテゴリを追加</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      id="newCategory"
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newCategoryName.trim()) {
+                          handleAddCategory()
+                        }
+                      }}
+                      placeholder="例: 基本操作"
+                    />
+                    <Button onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+                      追加
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 登録済みカテゴリ一覧 */}
+                <div>
+                  <Label>登録済みカテゴリ ({categories.length}件)</Label>
+                  <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                    {categories.map((cat) => {
+                      const problemCount = problems.filter((p) => p.category === cat).length
+                      return (
+                        <div
+                          key={cat}
+                          className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100"
+                        >
+                          <div className="flex-1">
+                            <span className="font-medium">{cat}</span>
+                            <span className="text-xs text-gray-500 ml-2">({problemCount}問)</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteCategory(cat)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                    {categories.length === 0 && (
+                      <div className="text-center text-gray-500 py-4">
+                        カテゴリが登録されていません
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2 border-t">
+                  <Button onClick={() => {
+                    setShowCategoryManagementModal(false)
+                    setNewCategoryName("")
+                  }}>
+                    閉じる
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* 利用規約モーダル */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <CardHeader>
+              <CardTitle>利用規約</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto">
+              <div className="space-y-4 text-sm">
+                <p className="font-semibold">
+                  本サービスをご利用いただく前に、以下の利用規約をお読みいただき、同意の上でご利用ください。
+                </p>
+
+                <div>
+                  <h3 className="font-semibold text-base mb-2">1. サービスの内容</h3>
+                  <p className="text-gray-700">
+                    本サービスは、提供者の裁量により、予告なく変更・中断・終了することがあります。
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-base mb-2">2. データの取り扱い</h3>
+                  <p className="text-gray-700 mb-2">
+                    システムの更新、障害、メンテナンス等により、ユーザが作成または保存したデータが消失・破損する可能性があります。
+                  </p>
+                  <p className="text-gray-700">
+                    提供者はデータの保全を保証するものではなく、これにより生じた損害について一切の責任を負いません。
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-base mb-2">3. 免責事項</h3>
+                  <p className="text-gray-700">
+                    本サービスの利用または利用不能により発生した損害（間接的・派生的損害を含む）について、提供者は責任を負いません。
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-base mb-2">4. 利用者の責任</h3>
+                  <p className="text-gray-700">
+                    ユーザは自己の責任において本サービスを利用するものとし、重要なデータについては適宜バックアップを行うものとします。
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6 pt-4 border-t">
+                {!hasAgreedToTerms && (
+                  <>
+                    <Button onClick={handleAgreeToTerms} className="flex-1">
+                      同意する
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (!hasAgreedToTerms) {
+                          alert("利用規約に同意いただけない場合、本サービスをご利用いただけません。")
+                        } else {
+                          setShowTermsModal(false)
+                        }
+                      }}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      同意しない
+                    </Button>
+                  </>
+                )}
+                {hasAgreedToTerms && (
+                  <Button onClick={() => setShowTermsModal(false)} className="w-full">
+                    閉じる
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ToasterとAIChatWidgetを追加 */}
       <Toaster />
