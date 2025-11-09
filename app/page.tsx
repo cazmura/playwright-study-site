@@ -2094,6 +2094,7 @@ export default function PlaywrightLearningApp() {
     const targetCategory = problemsList[0].category
     let finalFolderId = targetFolderId
     let finalCategory = targetCategory
+    let finalFolderName: string | null = null // 新規作成または確定したフォルダ名を保持
 
     // フォルダIDの検証（1回のみ）
     const folderExists = folders.some((f) => f.id === targetFolderId)
@@ -2107,6 +2108,7 @@ export default function PlaywrightLearningApp() {
       if (useDefault) {
         // デフォルトフォルダに保存
         finalFolderId = "default"
+        finalFolderName = "未分類"
       } else {
         // 新しいフォルダを作成
         const folderName = prompt("新しいフォルダ名を入力してください:")
@@ -2126,14 +2128,19 @@ export default function PlaywrightLearningApp() {
           setFolders(updatedFolders)
           saveFolders(updatedFolders)
 
-          // 新しいフォルダのIDを使用
+          // 新しいフォルダのIDと名前を使用
           finalFolderId = newFolder.id
+          finalFolderName = newFolder.name
         } else {
           // フォルダ名が入力されなかった場合はデフォルトフォルダに保存
           alert("フォルダ名が入力されなかったため、「未分類」フォルダに保存します。")
           finalFolderId = "default"
+          finalFolderName = "未分類"
         }
       }
+    } else {
+      // 既存のフォルダを使用
+      finalFolderName = folders.find((f) => f.id === finalFolderId)?.name || null
     }
 
     // カテゴリの検証と作成（1回のみ）
@@ -2195,15 +2202,15 @@ export default function PlaywrightLearningApp() {
     setProblems(updatedProblems)
     saveProblems(updatedProblems)
 
-    // フォルダ名を取得
-    const folderName = folders.find((f) => f.id === finalFolderId)?.name || "未分類"
+    // フォルダ名を取得（新規作成時はfinalFolderNameに保持されている）
+    const displayFolderName = finalFolderName || folders.find((f) => f.id === finalFolderId)?.name || "未分類"
 
     // ユーザーに結果を通知
-    const message = `✅ 問題を作成しました\n\n📁 フォルダ: ${folderName}\n🏷️ カテゴリ: ${finalCategory}\n📝 問題数: ${newProblems.length}件`
+    const message = `✅ 問題を作成しました\n\n📁 フォルダ: ${displayFolderName}\n🏷️ カテゴリ: ${finalCategory}\n📝 問題数: ${newProblems.length}件`
     alert(message)
 
     console.log(
-      `[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId} (${folderName}) with category ${finalCategory}`,
+      `[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId} (${displayFolderName}) with category ${finalCategory}`,
     )
   }
 
@@ -2572,8 +2579,8 @@ export default function PlaywrightLearningApp() {
                 {progressTab === "category" ? (
                   // カテゴリ別進捗
                   (() => {
-                    const categories = Array.from(new Set(problems.map((p) => p.category)))
-                    return categories.slice(0, 5).map((category) => {
+                    // カテゴリステートから全カテゴリを取得（問題がなくても表示）
+                    return categories.map((category) => {
                       const categoryProblems = problems.filter((p) => p.category === category)
                       const solvedInCategory = categoryProblems.filter((p) =>
                         userProgress.solvedProblems.includes(p.id)
