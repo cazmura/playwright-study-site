@@ -3045,35 +3045,6 @@ https://www.playwright-study-site.org/`
                   <ul className="text-gray-600 space-y-1">
                     <li>• 画面右下のチャットボタンからAIアシスタントを起動</li>
                     <li>• 学びたい内容を自然な言葉で伝えると、適切な問題を自動生成</li>
-                    <li>• 会話履歴を保持し、詳細を聞き返しながら問題を作成</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-2">📁 フォルダと問題数の指定</h3>
-                  <ul className="text-gray-600 space-y-1">
-                    <li>• 保存先のフォルダと作成する問題数を指定できます</li>
-                    <li>• 例: 「基本操作フォルダに5問作成して」</li>
-                    <li>• フォルダ名や問題数が指定されない場合、AIが確認します</li>
-                    <li>• 指定されたフォルダが存在しない場合は、新規作成または未分類フォルダを選択可能</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-2">📚 複数問題の一括生成</h3>
-                  <ul className="text-gray-600 space-y-1">
-                    <li>• 一度に複数の問題を作成可能（基礎→応用の流れ）</li>
-                    <li>• 指定した件数に応じて、段階的な問題セットを自動生成</li>
-                    <li>• 体系的な学習プランを自動構築</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-2">🔍 柔軟なフォルダ管理</h3>
-                  <ul className="text-gray-600 space-y-1">
-                    <li>• 指定したフォルダが存在しない場合、その場で新規作成可能</li>
-                    <li>• または「未分類」フォルダに保存を選択可能</li>
-                    <li>• 自動作成されたフォルダは紫色で表示され、区別しやすい</li>
                   </ul>
                 </div>
 
