@@ -77,11 +77,11 @@ ${categories && categories.length > 0 ? categories.map((c: string) => `- ${c}`).
 
 4. **問題作成のガイドライン**：
    - 問題の難易度は、ユーザーのレベルに応じて1（初級）、2（中級）、3（上級）から選択してください
-   - **重要**: expectedCodeには、**1行のコード**のみを記述してください（複数行は禁止）
-   - 1行で完結するシンプルな操作の問題を作成してください
-   - 例: await page.click('button') や await page.fill('#name', 'test')
-   - hintsは段階的に詳しくなるように3つ程度用意してください
-   - alternativeAnswersには、正解の別の書き方を含めてください（各解答も1行のみ）
+   - expectedCode は**1〜数行のPlaywrightコード**とし、必要なら条件分岐（if）、待機、ロケータ操作などを用いてください
+   - ただし、expectedCode 内にコメントや console 出力は含めないでください（純粋なコードのみ）
+   - 問題文は、ユーザーが正解を予想できるように「前提状態・対象要素のセレクタ・条件・目標」を具体的に記述してください
+   - hints は3〜5個、段階的に具体化してください（最後のヒントはほぼ解法に近づけてOK）
+   - alternativeAnswers には、等価なバリエーションを含めてください（ロケータ/セレクタの書き方違いなど）。複数行も可
 
 ## 例
 
@@ -104,15 +104,16 @@ ${categories && categories.length > 0 ? categories.map((c: string) => `- ${c}`).
 - expectedCode: "await page.fill('#email', 'test@example.com')"
 - expectedCode: "await page.locator('.submit').click()"
 
-悪い例（複数行は禁止）:
+悪い例（不適切な例）:
 - "const button = page.locator('button');\nawait button.click();" ← NG
 - "await page.goto('https://example.com');\nawait page.click('button');" ← NG
+   （課題で遷移を求めていないのに不要な操作が含まれている/目的が曖昧/コメントやconsole出力が含まれる など）
 
 問題を作成する際は、必ずcreateProblemツールを呼び出してください。`,
           },
           ...messages,
         ],
-        temperature: 0.7,
+        temperature: 0.4,
         max_tokens: 2000,
         tools: [
           {
@@ -130,7 +131,7 @@ ${categories && categories.length > 0 ? categories.map((c: string) => `- ${c}`).
                       properties: {
                         title: { type: "string", description: "問題のタイトル" },
                         description: { type: "string", description: "問題の説明" },
-                        expectedCode: { type: "string", description: "期待される回答コード（1行のみ）" },
+                        expectedCode: { type: "string", description: "期待される回答コード（1〜数行のPlaywrightコード）" },
                         alternativeAnswers: { type: "array", items: { type: "string" }, description: "代替解答のリスト" },
                         hints: { type: "array", items: { type: "string" }, description: "ヒントのリスト" },
                         difficulty: { type: "number", minimum: 1, maximum: 3, description: "難易度" },
