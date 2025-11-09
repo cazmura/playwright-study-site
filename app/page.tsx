@@ -2195,8 +2195,15 @@ export default function PlaywrightLearningApp() {
     setProblems(updatedProblems)
     saveProblems(updatedProblems)
 
+    // フォルダ名を取得
+    const folderName = folders.find((f) => f.id === finalFolderId)?.name || "未分類"
+
+    // ユーザーに結果を通知
+    const message = `✅ 問題を作成しました\n\n📁 フォルダ: ${folderName}\n🏷️ カテゴリ: ${finalCategory}\n📝 問題数: ${newProblems.length}件`
+    alert(message)
+
     console.log(
-      `[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId} with category ${finalCategory}`,
+      `[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId} (${folderName}) with category ${finalCategory}`,
     )
   }
 
