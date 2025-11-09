@@ -1465,8 +1465,8 @@ const loadCategories = (): string[] => {
       console.error("Failed to load categories from localStorage:", error)
     }
   }
-  // デフォルトカテゴリ
-  return ["基本操作", "要素の取得", "フォーム入力", "画面遷移", "アサーション"]
+  // デフォルトカテゴリ（サンプル問題のカテゴリを含む）
+  return ["要素選択", "アクション実行", "待機処理", "アサーション"]
 }
 
 // カテゴリを保存する関数
