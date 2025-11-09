@@ -2656,6 +2656,27 @@ export default function PlaywrightLearningApp() {
           </div>
         )}
 
+        {currentView === "learning" && !currentSession && (
+          <div className="text-center space-y-6">
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="text-6xl mb-4">📚</div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">学習セッションを開始しましょう</h2>
+                <p className="text-gray-600 mb-6">下のボタンから新しい学習セッションを開始できます</p>
+                <div className="flex gap-4 justify-center">
+                  <Button onClick={startNewSession} size="lg">
+                    <Play size={20} className="mr-2" />
+                    学習開始
+                  </Button>
+                  <Button variant="outline" onClick={() => setCurrentView("dashboard")}>
+                    ダッシュボードに戻る
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {currentView === "problems" && (
           <div className="space-y-6">
             {/* フォルダと問題の統合管理 */}
