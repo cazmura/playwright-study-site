@@ -3769,11 +3769,11 @@ https://www.playwright-study-site.org/`
       {/* 問題追加モーダル */}
       {showAddProblemModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => { setShowAddProblemModal(false); setSelectedFolderForAdd(""); setNewHints([]); setNewAlternatives([]); }}>
-          <Card className="w-full max-w-2xl my-8" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-2xl my-8 max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>新しい問題を追加</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 overflow-y-auto pr-1">
               <div>
                 <Label htmlFor="problem-title">タイトル</Label>
                 <Input id="problem-title" placeholder="例: ボタンをクリック" />
@@ -3931,11 +3931,11 @@ https://www.playwright-study-site.org/`
       {/* 問題編集モーダル */}
       {showEditProblemModal && editingProblem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => { setShowEditProblemModal(false); setEditingProblem(null); setEditHints([]); setEditAlternatives([]); }}>
-          <Card className="w-full max-w-2xl my-8" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-2xl my-8 max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <CardHeader>
               <CardTitle>問題を編集</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 overflow-y-auto pr-1">
               <div>
                 <Label htmlFor="edit-problem-title">タイトル</Label>
                 <Input id="edit-problem-title" defaultValue={editingProblem.title} />
