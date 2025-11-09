@@ -2218,23 +2218,25 @@ export default function PlaywrightLearningApp() {
   }
 
   const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {
-    const targetFolderId = folderId || "default"
     // フィールドをサニタイズしつつIDとフォルダIDを付与
     const processedProblems = importedProblems
       .filter(Boolean)
-      .map((p: any, idx: number) => ({
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9) + idx,
-        title: typeof p.title === "string" && p.title.trim() ? p.title : "無題の問題",
-        description: typeof p.description === "string" ? p.description : "",
-        expectedCode: typeof p.expectedCode === "string" ? p.expectedCode : "",
-        alternativeAnswers: Array.isArray(p.alternativeAnswers) ? p.alternativeAnswers : [],
-        hints: Array.isArray(p.hints) ? p.hints : [],
-        difficulty: typeof p.difficulty === "number" ? p.difficulty : 1,
-        category: typeof p.category === "string" ? p.category : "",
-        folderId: targetFolderId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }))
+      .map((p: any, idx: number) => {
+        const resolvedFolderId = folderId ?? (typeof p.folderId === "string" && p.folderId.trim() ? p.folderId : "default")
+        return {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9) + idx,
+          title: typeof p.title === "string" && p.title.trim() ? p.title : "無題の問題",
+          description: typeof p.description === "string" ? p.description : "",
+          expectedCode: typeof p.expectedCode === "string" ? p.expectedCode : "",
+          alternativeAnswers: Array.isArray(p.alternativeAnswers) ? p.alternativeAnswers : [],
+          hints: Array.isArray(p.hints) ? p.hints : [],
+          difficulty: typeof p.difficulty === "number" ? p.difficulty : 1,
+          category: typeof p.category === "string" ? p.category : "",
+          folderId: resolvedFolderId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      })
 
     if (confirm(`${processedProblems.length}個の問題をインポートしますか？`)) {
       const updatedProblems = [...problems, ...processedProblems]
@@ -2845,7 +2847,7 @@ https://www.playwright-study-site.org/`
                                             ...p,
                                             folderId: folder.id,
                                           }))
-                                          importProblems(problemsWithFolderId)
+                                          importProblems(problemsWithFolderId, folder.id)
                                         } catch (error) {
                                           alert("JSONファイルの読み込みに失敗しました")
                                         }
