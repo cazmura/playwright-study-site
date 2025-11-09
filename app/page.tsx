@@ -2078,9 +2078,23 @@ export default function PlaywrightLearningApp() {
     }
   }
 
-  const handleAIProblemGenerated = (problemData: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
-    // フォルダIDの検証
-    const folderExists = folders.some((f) => f.id === problemData.folderId)
+  const handleAIProblemGenerated = (
+    problemOrProblems:
+      | Omit<Problem, "id" | "createdAt" | "updatedAt">
+      | { problems: Array<Omit<Problem, "id" | "createdAt" | "updatedAt">> },
+  ) => {
+    // 複数問題の場合と単一問題の場合を判定
+    const isMultiple = "problems" in problemOrProblems
+    const problemsList = isMultiple ? problemOrProblems.problems : [problemOrProblems]
+
+    if (problemsList.length === 0) return
+
+    // 最初の問題のフォルダIDを確認（すべて同じフォルダに保存される想定）
+    const targetFolderId = problemsList[0].folderId
+    let finalFolderId = targetFolderId
+
+    // フォルダIDの検証（1回のみ）
+    const folderExists = folders.some((f) => f.id === targetFolderId)
 
     if (!folderExists) {
       // フォルダが存在しない場合、ユーザーに確認
@@ -2090,7 +2104,7 @@ export default function PlaywrightLearningApp() {
 
       if (useDefault) {
         // デフォルトフォルダに保存
-        problemData.folderId = "default"
+        finalFolderId = "default"
       } else {
         // 新しいフォルダを作成
         const folderName = prompt("新しいフォルダ名を入力してください:")
@@ -2111,27 +2125,29 @@ export default function PlaywrightLearningApp() {
           saveFolders(updatedFolders)
 
           // 新しいフォルダのIDを使用
-          problemData.folderId = newFolder.id
+          finalFolderId = newFolder.id
         } else {
           // フォルダ名が入力されなかった場合はデフォルトフォルダに保存
           alert("フォルダ名が入力されなかったため、「未分類」フォルダに保存します。")
-          problemData.folderId = "default"
+          finalFolderId = "default"
         }
       }
     }
 
-    const newProblem: Problem = {
+    // 全ての問題を作成
+    const newProblems: Problem[] = problemsList.map((problemData, index) => ({
       ...problemData,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      folderId: finalFolderId, // 確定したフォルダIDを使用
+      id: (Date.now() + index).toString() + Math.random().toString(36).substr(2, 9),
       createdAt: new Date(),
       updatedAt: new Date(),
-    }
+    }))
 
-    const updatedProblems = [...problems, newProblem]
+    const updatedProblems = [...problems, ...newProblems]
     setProblems(updatedProblems)
     saveProblems(updatedProblems)
 
-    // toastは表示しない（AIチャット内で完結するため）
+    console.log(`[v0] Created ${newProblems.length} problem(s) in folder ${finalFolderId}`)
   }
 
   const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {

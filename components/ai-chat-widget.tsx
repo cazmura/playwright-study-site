@@ -27,16 +27,31 @@ interface FolderType {
 }
 
 interface AIChatWidgetProps {
-  onProblemGenerated: (problem: {
-    title: string
-    description: string
-    expectedCode: string
-    alternativeAnswers?: string[]
-    hints: string[]
-    difficulty: number
-    category: string
-    folderId: string
-  }) => void
+  onProblemGenerated: (
+    problemOrProblems:
+      | {
+          title: string
+          description: string
+          expectedCode: string
+          alternativeAnswers?: string[]
+          hints: string[]
+          difficulty: number
+          category: string
+          folderId: string
+        }
+      | {
+          problems: Array<{
+            title: string
+            description: string
+            expectedCode: string
+            alternativeAnswers?: string[]
+            hints: string[]
+            difficulty: number
+            category: string
+            folderId: string
+          }>
+        },
+  ) => void
   folders: FolderType[]
 }
 
@@ -103,9 +118,8 @@ export function AIChatWidget({ onProblemGenerated, folders }: AIChatWidgetProps)
         if (data.toolCall.name === "createProblems") {
           console.log("[v0] Creating multiple problems:", data.toolCall.parameters.problems.length)
           try {
-            for (const problem of data.toolCall.parameters.problems) {
-              onProblemGenerated(problem)
-            }
+            // 複数問題の場合は全問題を渡す（一括処理のため）
+            onProblemGenerated(data.toolCall.parameters)
           } catch (err) {
             console.error("[v0] Failed to create problems:", err)
             setError("問題の作成に失敗しました")
@@ -180,6 +194,14 @@ export function AIChatWidget({ onProblemGenerated, folders }: AIChatWidgetProps)
                       <div className="mt-2 pt-2 border-t border-border/50 flex items-center gap-2 text-green-600">
                         <CheckCircle className="h-4 w-4" />
                         <span className="text-xs">問題「{message.toolCall.parameters.title}」を作成しました</span>
+                      </div>
+                    )}
+                    {message.toolCall && message.toolCall.name === "createProblems" && (
+                      <div className="mt-2 pt-2 border-t border-border/50 flex items-center gap-2 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-xs">
+                          {message.toolCall.parameters.problems.length}問の問題を作成しました
+                        </span>
                       </div>
                     )}
                   </div>
