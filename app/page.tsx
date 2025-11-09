@@ -3335,7 +3335,7 @@ https://www.playwright-study-site.org/`
                     className="h-14 hover:opacity-80 transition-opacity"
                   />
                 </a>
-                <p className="text-gray-500 text-xs">Ko-fiは手数料無料の支援プラットフォームです</p>
+                <p className="text-gray-500 text-xs">支援プラットフォームに遷移します</p>
               </CardContent>
             </Card>
           </div>
