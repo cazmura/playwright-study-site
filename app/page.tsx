@@ -2219,13 +2219,22 @@ export default function PlaywrightLearningApp() {
 
   const importProblems = (importedProblems: Problem[], folderId?: string): boolean => {
     const targetFolderId = folderId || "default"
-    const processedProblems = importedProblems.map((p) => ({
-      ...p,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // Generate a more unique ID
-      folderId: targetFolderId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }))
+    // フィールドをサニタイズしつつIDとフォルダIDを付与
+    const processedProblems = importedProblems
+      .filter(Boolean)
+      .map((p: any, idx: number) => ({
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9) + idx,
+        title: typeof p.title === "string" && p.title.trim() ? p.title : "無題の問題",
+        description: typeof p.description === "string" ? p.description : "",
+        expectedCode: typeof p.expectedCode === "string" ? p.expectedCode : "",
+        alternativeAnswers: Array.isArray(p.alternativeAnswers) ? p.alternativeAnswers : [],
+        hints: Array.isArray(p.hints) ? p.hints : [],
+        difficulty: typeof p.difficulty === "number" ? p.difficulty : 1,
+        category: typeof p.category === "string" ? p.category : "",
+        folderId: targetFolderId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }))
 
     if (confirm(`${processedProblems.length}個の問題をインポートしますか？`)) {
       const updatedProblems = [...problems, ...processedProblems]
