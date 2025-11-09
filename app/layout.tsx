@@ -5,7 +5,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Playwright 学習サイト',
-  description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール。AI機能で自動問題生成。',
+  description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール',
   keywords: ['Playwright', 'E2Eテスト', 'プログラミング学習', 'テスト自動化', 'AI問題生成'],
   authors: [{ name: 'Playwright学習サイト' }],
   creator: 'Playwright学習サイト',
@@ -17,14 +17,14 @@ export const metadata: Metadata = {
     locale: 'ja_JP',
     url: 'https://www.playwright-study-site.org',
     title: 'Playwright 学習サイト',
-    description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール。AI機能で自動問題生成。',
+    description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール',
     siteName: 'Playwright 学習サイト',
   },
 
   twitter: {
     card: 'summary_large_image',
     title: 'Playwright 学習サイト',
-    description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール。AI機能で自動問題生成。',
+    description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール',
   },
 
   robots: {
