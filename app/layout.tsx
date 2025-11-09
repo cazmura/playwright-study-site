@@ -7,9 +7,9 @@ export const metadata: Metadata = {
   title: 'Playwright 学習ツール',
   description: 'Playwrightのコードを実際に書いて学習できるインタラクティブな学習ツール',
   keywords: ['Playwright', 'E2Eテスト', 'プログラミング学習', 'テスト自動化', 'AI問題生成'],
-  authors: [{ name: 'Playwright学習サイト' }],
-  creator: 'Playwright学習サイト',
-  publisher: 'Playwright学習サイト',
+  authors: [{ name: 'Playwright学習ツール' }],
+  creator: 'Playwright学習ツール',
+  publisher: 'Playwright学習ツール',
   metadataBase: new URL('https://www.playwright-study-site.org'),
 
   openGraph: {
