@@ -19,20 +19,44 @@ interface Message {
   }
 }
 
-interface AIChatWidgetProps {
-  onProblemGenerated: (problem: {
-    title: string
-    description: string
-    expectedCode: string
-    alternativeAnswers?: string[]
-    hints: string[]
-    difficulty: number
-    category: string
-    folderId: string
-  }) => void
+interface FolderType {
+  id: string
+  name: string
+  description: string
+  color: string
 }
 
-export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
+interface AIChatWidgetProps {
+  onProblemGenerated: (
+    problemOrProblems:
+      | {
+          title: string
+          description: string
+          expectedCode: string
+          alternativeAnswers?: string[]
+          hints: string[]
+          difficulty: number
+          category: string
+          folderId: string
+        }
+      | {
+          problems: Array<{
+            title: string
+            description: string
+            expectedCode: string
+            alternativeAnswers?: string[]
+            hints: string[]
+            difficulty: number
+            category: string
+            folderId: string
+          }>
+        },
+  ) => void
+  folders: FolderType[]
+  categories: string[]
+}
+
+export function AIChatWidget({ onProblemGenerated, folders, categories }: AIChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -71,6 +95,8 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
             role: m.role,
             content: m.content,
           })),
+          folders: folders,
+          categories: categories,
         }),
       })
 
@@ -90,13 +116,24 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      if (data.toolCall && data.toolCall.name === "createProblem") {
-        console.log("[v0] Creating problem:", data.toolCall.parameters)
-        try {
-          onProblemGenerated(data.toolCall.parameters)
-        } catch (err) {
-          console.error("[v0] Failed to create problem:", err)
-          setError("問題の作成に失敗しました")
+      if (data.toolCall) {
+        if (data.toolCall.name === "createProblems") {
+          console.log("[v0] Creating multiple problems:", data.toolCall.parameters.problems.length)
+          try {
+            // 複数問題の場合は全問題を渡す（一括処理のため）
+            onProblemGenerated(data.toolCall.parameters)
+          } catch (err) {
+            console.error("[v0] Failed to create problems:", err)
+            setError("問題の作成に失敗しました")
+          }
+        } else if (data.toolCall.name === "createProblem") {
+          console.log("[v0] Creating problem:", data.toolCall.parameters)
+          try {
+            onProblemGenerated(data.toolCall.parameters)
+          } catch (err) {
+            console.error("[v0] Failed to create problem:", err)
+            setError("問題の作成に失敗しました")
+          }
         }
       }
     } catch (err) {
@@ -159,6 +196,14 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
                       <div className="mt-2 pt-2 border-t border-border/50 flex items-center gap-2 text-green-600">
                         <CheckCircle className="h-4 w-4" />
                         <span className="text-xs">問題「{message.toolCall.parameters.title}」を作成しました</span>
+                      </div>
+                    )}
+                    {message.toolCall && message.toolCall.name === "createProblems" && (
+                      <div className="mt-2 pt-2 border-t border-border/50 flex items-center gap-2 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-xs">
+                          {message.toolCall.parameters.problems.length}問の問題を作成しました
+                        </span>
                       </div>
                     )}
                   </div>
