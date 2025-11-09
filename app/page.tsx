@@ -852,14 +852,17 @@ const ProblemManager = ({
         const content = e.target?.result as string
         const importedData = JSON.parse(content)
 
-        // フォルダ指定でのインポートかどうかを確認
-        if (importedData.folder && importedData.problems) {
-          // フォルダ付きインポート
-          const folderId = selectedFolder === "all" ? "default" : selectedFolder
+        // 取りうる形式:
+        // 1) { folder, problems }
+        // 2) { folders, problems }
+        // 3) Problem[]
+        const folderId = selectedFolder === "all" ? "default" : selectedFolder
+
+        if (importedData && Array.isArray(importedData.problems)) {
+          // 1) フォルダ付き or 2) 全体エクスポートの形式
           onImport(importedData.problems, folderId)
         } else if (Array.isArray(importedData)) {
-          // 従来の問題のみのインポート
-          const folderId = selectedFolder === "all" ? "default" : selectedFolder
+          // 3) 問題配列のみ
           onImport(importedData, folderId)
         } else {
           alert("不正なファイル形式です。")
@@ -1165,11 +1168,11 @@ const ProblemManager = ({
               </SelectContent>
             </Select>
             <Button onClick={() => onExport(selectedFolder === "all" ? undefined : selectedFolder)} variant="outline">
-              <Upload size={16} className="mr-2" />
+              <Download size={16} className="mr-2" />
               エクスポート
             </Button>
             <Button onClick={() => fileInputRef.current?.click()} variant="outline">
-              <Download size={16} className="mr-2" />
+              <Upload size={16} className="mr-2" />
               インポート
             </Button>
             <Button onClick={() => setIsAddingProblem(true)}>
@@ -2817,9 +2820,19 @@ https://www.playwright-study-site.org/`
                                       const reader = new FileReader()
                                       reader.onload = (event) => {
                                         try {
-                                          const json = JSON.parse(event.target?.result as string)
+                                          const parsed = JSON.parse(event.target?.result as string)
+                                          // 受け取り形式に応じて問題配列を抽出
+                                          const problemsArray = Array.isArray(parsed)
+                                            ? parsed
+                                            : Array.isArray(parsed?.problems)
+                                              ? parsed.problems
+                                              : null
+                                          if (!Array.isArray(problemsArray)) {
+                                            alert("不正なファイル形式です。問題配列が見つかりません")
+                                            return
+                                          }
                                           // フォルダIDを上書きしてインポート
-                                          const problemsWithFolderId = json.map((p: any) => ({
+                                          const problemsWithFolderId = problemsArray.map((p: any) => ({
                                             ...p,
                                             folderId: folder.id,
                                           }))
