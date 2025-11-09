@@ -17,7 +17,7 @@ test.describe('Problem registration', () => {
     await page.waitForLoadState('networkidle');
 
     // Header visible
-    await expect(page.getByRole('heading', { name: 'Playwright学習アプリ' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Playwright学習ツール' })).toBeVisible();
 
     // Go to Problem Management
     await page.getByRole('button', { name: '問題管理' }).click();

@@ -2337,7 +2337,7 @@ export default function PlaywrightLearningApp() {
     const todayProblems = userProgress.dailyActivity.find((a) => a.date === today)?.problemsSolved || 0
     const nextLevelProblems = 10 - (userProgress.totalSolved % 10)
 
-    return `📚 Playwright学習アプリで学習中！
+    return `📚 Playwright学習ツールで学習中！
 
 🔥 連続学習: ${currentStreak}日
 📊 今日の学習: ${todayProblems}問
@@ -2386,7 +2386,7 @@ https://www.playwright-study-site.org/`
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
           <div className="flex flex-col sm:flex-row items-center justify-between py-2 sm:h-16">
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-8 w-full sm:w-auto">
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900">Playwright学習アプリ</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900">Playwright学習ツール</h1>
               <nav className="flex flex-wrap gap-1 sm:gap-2 justify-center">
                 <Button
                   variant={currentView === "dashboard" ? "default" : "ghost"}
@@ -3024,7 +3024,7 @@ https://www.playwright-study-site.org/`
             {/* アプリケーション概要 */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-2xl">📚 Playwright学習アプリ マニュアル</CardTitle>
+                <CardTitle className="text-2xl">📚 Playwright学習ツール マニュアル</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-gray-700 mb-4">
