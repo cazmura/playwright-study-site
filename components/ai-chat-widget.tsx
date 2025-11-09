@@ -19,6 +19,13 @@ interface Message {
   }
 }
 
+interface FolderType {
+  id: string
+  name: string
+  description: string
+  color: string
+}
+
 interface AIChatWidgetProps {
   onProblemGenerated: (problem: {
     title: string
@@ -30,9 +37,10 @@ interface AIChatWidgetProps {
     category: string
     folderId: string
   }) => void
+  folders: FolderType[]
 }
 
-export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
+export function AIChatWidget({ onProblemGenerated, folders }: AIChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -71,6 +79,7 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
             role: m.role,
             content: m.content,
           })),
+          folders: folders,
         }),
       })
 
@@ -90,13 +99,25 @@ export function AIChatWidget({ onProblemGenerated }: AIChatWidgetProps) {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      if (data.toolCall && data.toolCall.name === "createProblem") {
-        console.log("[v0] Creating problem:", data.toolCall.parameters)
-        try {
-          onProblemGenerated(data.toolCall.parameters)
-        } catch (err) {
-          console.error("[v0] Failed to create problem:", err)
-          setError("問題の作成に失敗しました")
+      if (data.toolCall) {
+        if (data.toolCall.name === "createProblems") {
+          console.log("[v0] Creating multiple problems:", data.toolCall.parameters.problems.length)
+          try {
+            for (const problem of data.toolCall.parameters.problems) {
+              onProblemGenerated(problem)
+            }
+          } catch (err) {
+            console.error("[v0] Failed to create problems:", err)
+            setError("問題の作成に失敗しました")
+          }
+        } else if (data.toolCall.name === "createProblem") {
+          console.log("[v0] Creating problem:", data.toolCall.parameters)
+          try {
+            onProblemGenerated(data.toolCall.parameters)
+          } catch (err) {
+            console.error("[v0] Failed to create problem:", err)
+            setError("問題の作成に失敗しました")
+          }
         }
       }
     } catch (err) {
