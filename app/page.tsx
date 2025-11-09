@@ -1880,37 +1880,28 @@ export default function PlaywrightLearningApp() {
           ? prev.dailyActivity.map((a) => (a.date === today ? { ...a, problemsSolved: a.problemsSolved + 1 } : a))
           : [...prev.dailyActivity, { date: today, problemsSolved: 1 }]
 
-        // 自力/非自力を区別せず、未クリアの一意問題のみカウント
-        if (!prev.solvedProblems.includes(currentProblem.id)) {
-          const newSolvedProblems = [...prev.solvedProblems, currentProblem.id]
-          const newTotalSolved = newSolvedProblems.length
-          const newLevel = calculateLevel(newTotalSolved)
+        // 総解答数は一意性を問わず、正解のたびに +1
+        const incrementedTotal = prev.totalSolved + 1
 
-          // 「自力のみ」判定: この正解の直前に解答比較を見ていなければ自力とみなす
-          const isSelfSolvedNow = !currentSession.answersShown.has(currentProblem.id)
-          const newSolvedWithoutHelp = isSelfSolvedNow && !prev.solvedWithoutHelp.includes(currentProblem.id)
-            ? [...prev.solvedWithoutHelp, currentProblem.id]
-            : prev.solvedWithoutHelp
+        // 一意のクリア履歴は維持（初回のみ追加）
+        const newSolvedProblems = prev.solvedProblems.includes(currentProblem.id)
+          ? prev.solvedProblems
+          : [...prev.solvedProblems, currentProblem.id]
 
-          return {
-            ...prev,
-            solvedProblems: newSolvedProblems,
-            solvedWithoutHelp: newSolvedWithoutHelp,
-            totalSolved: newTotalSolved,
-            currentLevel: newLevel,
-            lastActivityDate: new Date(),
-            dailyActivity: updatedDailyActivity,
-          }
-        }
-        // 既にクリア済みでも、本回が自力であれば自力フラグを付与
+        // 自力クリア履歴は、今回が自力なら付与（初回でなくても可）
         const isSelfSolvedNow = !currentSession.answersShown.has(currentProblem.id)
-        const updatedSolvedWithoutHelp = isSelfSolvedNow && !prev.solvedWithoutHelp.includes(currentProblem.id)
+        const newSolvedWithoutHelp = isSelfSolvedNow && !prev.solvedWithoutHelp.includes(currentProblem.id)
           ? [...prev.solvedWithoutHelp, currentProblem.id]
           : prev.solvedWithoutHelp
 
+        const newLevel = calculateLevel(incrementedTotal)
+
         return {
           ...prev,
-          solvedWithoutHelp: updatedSolvedWithoutHelp,
+          solvedProblems: newSolvedProblems,
+          solvedWithoutHelp: newSolvedWithoutHelp,
+          totalSolved: incrementedTotal,
+          currentLevel: newLevel,
           lastActivityDate: new Date(),
           dailyActivity: updatedDailyActivity,
         }
