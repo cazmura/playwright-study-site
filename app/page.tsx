@@ -21,6 +21,8 @@ import {
   Cog,
   X,
   FileText,
+  Share2,
+  Copy,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card" // Update: Added CardDescription, CardFooter
@@ -89,6 +91,14 @@ interface AppSettings {
 interface QuestionOrder {
   type: "random" | "unlearned-first" | "learned-first" | "easy-first" | "hard-first"
   label: string
+}
+
+// 前回の学習設定を保存する型
+interface LastLearningSettings {
+  selectionType: "folder" | "category"
+  selectedFolders: string[]
+  selectedCategories: string[]
+  questionOrder: QuestionOrder["type"]
 }
 
 // 出題方法の選択肢を定義
@@ -1402,6 +1412,32 @@ const saveUserProgress = (progress: UserProgress) => {
   }
 }
 
+// 前回の学習設定を読み込む
+const loadLastLearningSettings = (): LastLearningSettings | null => {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("playwright-learning-last-settings")
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (error) {
+      console.error("Failed to load last learning settings:", error)
+    }
+  }
+  return null
+}
+
+// 前回の学習設定を保存する
+const saveLastLearningSettings = (settings: LastLearningSettings) => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("playwright-learning-last-settings", JSON.stringify(settings))
+    } catch (error) {
+      console.error("Failed to save last learning settings:", error)
+    }
+  }
+}
+
 // モバイル端末検出用のhook
 // The original useIsMobile hook was removed because it was redeclared.
 // This is the corrected version.
@@ -1484,12 +1520,49 @@ export default function PlaywrightLearningApp() {
 
   const isMobile = useIsMobile()
 
-  // 出題方法の設定を管理
+  // 出題方法の設定を管理（非推奨：旧モーダル用）
   const [questionOrder, setQuestionOrder] = useState<QuestionOrder["type"]>("unlearned-first")
   const [showQuestionOrderModal, setShowQuestionOrderModal] = useState(false)
   const [showFolderSelectionModal, setShowFolderSelectionModal] = useState(false)
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
   const [progressTab, setProgressTab] = useState<"category" | "folder">("category")
+
+  // 新しい統合学習開始モーダル用の状態
+  const [showUnifiedStartModal, setShowUnifiedStartModal] = useState(false)
+  const [hasLastSettings, setHasLastSettings] = useState(false)
+  const [selectionType, setSelectionType] = useState<"folder" | "category">("folder")
+  const [selectedFoldersNew, setSelectedFoldersNew] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [questionOrderNew, setQuestionOrderNew] = useState<QuestionOrder["type"]>("unlearned-first")
+
+  // ストリーク（連続学習日数）の状態
+  const [currentStreak, setCurrentStreak] = useState(0)
+
+  // SNSシェアの表示状態
+  const [showShareOptions, setShowShareOptions] = useState(false)
+
+  // 前回の設定を読み込む（クライアント側のみ）
+  useEffect(() => {
+    const lastSettings = loadLastLearningSettings()
+    if (lastSettings) {
+      setHasLastSettings(true)
+      setSelectionType(lastSettings.selectionType)
+      setSelectedFoldersNew(lastSettings.selectedFolders)
+      setSelectedCategories(lastSettings.selectedCategories)
+      setQuestionOrderNew(lastSettings.questionOrder)
+    }
+  }, [])
+
+  // ストリークを計算（クライアント側のみ）
+  useEffect(() => {
+    let streak = 0
+    const sortedActivity = [...userProgress.dailyActivity].sort((a, b) => b.date.localeCompare(a.date))
+    for (const activity of sortedActivity) {
+      if (activity.problemsSolved > 0) streak++
+      else break
+    }
+    setCurrentStreak(streak)
+  }, [userProgress.dailyActivity])
 
   // 問題を選択する関数を追加
   const selectProblemsForSession = (
@@ -1501,6 +1574,58 @@ export default function PlaywrightLearningApp() {
     // フォルダでフィルタリング
     const filteredProblems =
       folderIds.length === 0 ? allProblems : allProblems.filter((p) => folderIds.includes(p.folderId))
+
+    let sortedProblems: Problem[] = []
+
+    switch (orderType) {
+      case "random":
+        sortedProblems = [...filteredProblems].sort(() => Math.random() - 0.5)
+        break
+
+      case "unlearned-first":
+        const unlearned = filteredProblems.filter((p) => !solvedProblems.includes(p.id))
+        const learned = filteredProblems.filter((p) => solvedProblems.includes(p.id))
+        sortedProblems = [...unlearned, ...learned]
+        break
+
+      case "learned-first":
+        const learnedFirst = filteredProblems.filter((p) => solvedProblems.includes(p.id))
+        const unlearnedLast = filteredProblems.filter((p) => !solvedProblems.includes(p.id))
+        sortedProblems = [...learnedFirst, ...unlearnedLast]
+        break
+
+      case "easy-first":
+        sortedProblems = [...filteredProblems].sort((a, b) => a.difficulty - b.difficulty)
+        break
+
+      case "hard-first":
+        sortedProblems = [...filteredProblems].sort((a, b) => b.difficulty - a.difficulty)
+        break
+
+      default:
+        sortedProblems = filteredProblems
+    }
+
+    return sortedProblems.slice(0, 5) // 最初の5問を選択
+  }
+
+  // カテゴリまたはフォルダで問題を選択する新しい関数
+  const selectProblemsForSessionNew = (
+    orderType: QuestionOrder["type"],
+    allProblems: Problem[],
+    solvedProblems: string[],
+    type: "folder" | "category",
+    folderIds: string[],
+    categoryNames: string[],
+  ): Problem[] => {
+    // フォルダまたはカテゴリでフィルタリング
+    let filteredProblems: Problem[]
+    if (type === "folder") {
+      filteredProblems = folderIds.length === 0 ? allProblems : allProblems.filter((p) => folderIds.includes(p.folderId))
+    } else {
+      filteredProblems =
+        categoryNames.length === 0 ? allProblems : allProblems.filter((p) => categoryNames.includes(p.category))
+    }
 
     let sortedProblems: Problem[] = []
 
@@ -1559,7 +1684,79 @@ export default function PlaywrightLearningApp() {
   }, [settings])
 
   const startNewSession = () => {
-    setShowFolderSelectionModal(true)
+    // 新しい統合モーダルを開く
+    setShowUnifiedStartModal(true)
+  }
+
+  // クイックスタート：前回と同じ設定で開始
+  const quickStart = () => {
+    const lastSettings = loadLastLearningSettings()
+    if (!lastSettings) {
+      // 前回の設定がない場合は通常のモーダルを開く
+      setShowUnifiedStartModal(true)
+      return
+    }
+
+    // 前回の設定でセッションを開始
+    startSessionWithUnifiedSettings(
+      lastSettings.selectionType,
+      lastSettings.selectionType === "folder" ? lastSettings.selectedFolders : lastSettings.selectedCategories,
+      lastSettings.questionOrder,
+    )
+  }
+
+  // 統合モーダルから学習を開始
+  const startSessionWithUnifiedSettings = (
+    type: "folder" | "category",
+    selectedIds: string[],
+    orderType: QuestionOrder["type"],
+  ) => {
+    if (selectedIds.length === 0) {
+      alert(type === "folder" ? "フォルダを選択してください" : "カテゴリを選択してください")
+      return
+    }
+
+    const selectedProblems = selectProblemsForSessionNew(
+      orderType,
+      problems,
+      userProgress.solvedProblems,
+      type,
+      type === "folder" ? selectedIds : [],
+      type === "category" ? selectedIds : [],
+    )
+
+    if (selectedProblems.length === 0) {
+      alert("選択した条件に一致する問題がありません")
+      return
+    }
+
+    // 設定を保存
+    saveLastLearningSettings({
+      selectionType: type,
+      selectedFolders: type === "folder" ? selectedIds : [],
+      selectedCategories: type === "category" ? selectedIds : [],
+      questionOrder: orderType,
+    })
+
+    // セッションを開始
+    setCurrentSession({
+      sessionId: Date.now().toString(),
+      problems: selectedProblems,
+      currentProblemIndex: 0,
+      startedAt: new Date(),
+      isCompleted: false,
+      answersShown: new Set(),
+      selectedFolders: type === "folder" ? selectedIds : [],
+    })
+
+    setCurrentView("learning")
+    setUserCode("")
+    setCurrentHintIndex(-1)
+    setShowAnswer(false)
+    setFeedback(null)
+    setShowComparison(false)
+    setUserAnswerForComparison("")
+    setShowUnifiedStartModal(false)
   }
 
   const startFolderSelection = () => {
@@ -1916,11 +2113,55 @@ export default function PlaywrightLearningApp() {
       }
       setUserProgress(resetData)
       saveUserProgress(resetData)
+
+      // 前回の学習設定もクリア
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("playwright-learning-last-settings")
+        setHasLastSettings(false)
+      }
+
       alert("学習進捗をリセットしました。")
     }
   }
 
   const character = getCharacterInfo(userProgress.currentLevel)
+
+  // SNSシェア用のテキスト生成
+  const generateShareText = () => {
+    const today = new Date().toISOString().split("T")[0]
+    const todayProblems = userProgress.dailyActivity.find((a) => a.date === today)?.problemsSolved || 0
+    const nextLevelProblems = 10 - (userProgress.totalSolved % 10)
+
+    return `📚 Playwright学習アプリで学習中！
+
+🔥 連続学習: ${currentStreak}日
+📊 今日の学習: ${todayProblems}問
+📈 総解答数: ${userProgress.totalSolved}問
+⭐ 現在のレベル: Lv.${userProgress.currentLevel}
+🎯 次の目標: レベル${userProgress.currentLevel + 1}まであと${nextLevelProblems}問
+
+#Playwright #プログラミング学習 #E2Eテスト`
+  }
+
+  // Twitterでシェア
+  const shareToTwitter = () => {
+    const text = generateShareText()
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
+    window.open(url, "_blank", "noopener,noreferrer")
+  }
+
+  // テキストをクリップボードにコピー
+  const copyShareText = () => {
+    const text = generateShareText()
+    navigator.clipboard.writeText(text).then(
+      () => {
+        alert("シェア用テキストをクリップボードにコピーしました！")
+      },
+      () => {
+        alert("コピーに失敗しました。")
+      }
+    )
+  }
 
   const editProblem = (id: string, problem: Omit<Problem, "id" | "createdAt" | "updatedAt">) => {
     const updatedProblems = problems.map((p) => (p.id === id ? { ...p, ...problem, updatedAt: new Date() } : p))
@@ -2008,15 +2249,7 @@ export default function PlaywrightLearningApp() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
                 <div className="text-sm font-medium text-gray-700">
-                  🔥 {(() => {
-                    let streak = 0
-                    const sortedActivity = [...userProgress.dailyActivity].sort((a, b) => b.date.localeCompare(a.date))
-                    for (const activity of sortedActivity) {
-                      if (activity.problemsSolved > 0) streak++
-                      else break
-                    }
-                    return streak
-                  })()}日
+                  🔥 {currentStreak}日
                 </div>
                 <div className="text-sm font-medium bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
                   Lv.{userProgress.currentLevel}
@@ -2053,15 +2286,7 @@ export default function PlaywrightLearningApp() {
                   <div>
                     <div className="text-sm text-gray-600">🔥 連続学習</div>
                     <div className="text-2xl font-bold">
-                      {(() => {
-                        let streak = 0
-                        const sortedActivity = [...userProgress.dailyActivity].sort((a, b) => b.date.localeCompare(a.date))
-                        for (const activity of sortedActivity) {
-                          if (activity.problemsSolved > 0) streak++
-                          else break
-                        }
-                        return streak
-                      })()}日
+                      {currentStreak}日
                     </div>
                   </div>
                 </div>
@@ -2093,7 +2318,7 @@ export default function PlaywrightLearningApp() {
                   <CardTitle className="text-lg">📈 今週の進捗</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">今週の解答数</span>
                       <span className="text-lg font-bold">
@@ -2105,6 +2330,32 @@ export default function PlaywrightLearningApp() {
                             .reduce((sum, a) => sum + a.problemsSolved, 0)
                         })()}問
                       </span>
+                    </div>
+
+                    {/* SNSシェアボタン */}
+                    <div className="pt-2 border-t border-gray-200">
+                      <button
+                        onClick={() => setShowShareOptions(!showShareOptions)}
+                        className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                      >
+                        <Share2 size={12} />
+                        学習記録をシェア
+                      </button>
+
+                      {showShareOptions && (
+                        <div className="mt-3 space-y-2">
+                          <div className="flex gap-2">
+                            <Button onClick={shareToTwitter} size="sm" className="text-xs bg-blue-500 hover:bg-blue-600">
+                              <Share2 size={12} className="mr-1" />
+                              Twitter
+                            </Button>
+                            <Button onClick={copyShareText} size="sm" variant="outline" className="text-xs">
+                              <Copy size={12} className="mr-1" />
+                              コピー
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -2200,10 +2451,10 @@ export default function PlaywrightLearningApp() {
             <LearningCalendar dailyActivity={userProgress.dailyActivity.slice(-28)} />
 
             {/* 学習開始ボタン */}
-            <div className="text-center">
+            <div className="flex justify-center">
               <Button onClick={startNewSession} size="lg" className="text-lg">
                 <Play size={20} className="mr-2" />
-                新しいセッションを開始
+                学習開始
               </Button>
             </div>
           </div>
@@ -2818,6 +3069,183 @@ export default function PlaywrightLearningApp() {
                 </div>
                 <div className="mt-4">
                   <Button onClick={() => setShowQuestionOrderModal(false)} variant="ghost" className="w-full">
+                    キャンセル
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* 統合学習開始モーダル */}
+        {showUnifiedStartModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <CardTitle>学習範囲を選択</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* 前回の続きから開始ボタン */}
+                {hasLastSettings && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-blue-900">前回の設定で続きから</div>
+                        <div className="text-sm text-blue-700 mt-1">
+                          {(() => {
+                            const type = selectionType === "folder" ? "フォルダ" : "カテゴリ"
+                            const count = selectionType === "folder"
+                              ? selectedFoldersNew.length
+                              : selectedCategories.length
+                            const orderLabel = questionOrderOptions.find(o => o.type === questionOrderNew)?.label || ""
+                            return `${type}: ${count}件選択 / ${orderLabel}`
+                          })()}
+                        </div>
+                      </div>
+                      <Button onClick={quickStart} variant="default">
+                        <Play size={16} className="mr-1" />
+                        開始
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* タブ切り替え */}
+                <div className="flex gap-2 border-b">
+                  <Button
+                    variant={selectionType === "folder" ? "default" : "ghost"}
+                    className="flex-1"
+                    onClick={() => {
+                      setSelectionType("folder")
+                      setSelectedCategories([])
+                    }}
+                  >
+                    📁 フォルダで選ぶ
+                  </Button>
+                  <Button
+                    variant={selectionType === "category" ? "default" : "ghost"}
+                    className="flex-1"
+                    onClick={() => {
+                      setSelectionType("category")
+                      setSelectedFoldersNew([])
+                    }}
+                  >
+                    🏷️ カテゴリで選ぶ
+                  </Button>
+                </div>
+
+                {/* フォルダ選択 */}
+                {selectionType === "folder" && (
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {folders.map((folder) => {
+                      const problemCount = problems.filter((p) => p.folderId === folder.id).length
+                      return (
+                        <div key={folder.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`folder-${folder.id}`}
+                            checked={selectedFoldersNew.includes(folder.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedFoldersNew((prev) => [...prev, folder.id])
+                              } else {
+                                setSelectedFoldersNew((prev) => prev.filter((id) => id !== folder.id))
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`folder-${folder.id}`}
+                            className={`flex-1 p-3 rounded cursor-pointer ${folder.color} hover:opacity-80`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Folder size={16} />
+                                <span className="font-medium">{folder.name}</span>
+                              </div>
+                              <span className="text-sm text-gray-600">({problemCount}問)</span>
+                            </div>
+                          </label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* カテゴリ選択 */}
+                {selectionType === "category" && (
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {categories.map((category) => {
+                      const problemCount = problems.filter((p) => p.category === category).length
+                      return (
+                        <div key={category} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`category-${category}`}
+                            checked={selectedCategories.includes(category)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedCategories((prev) => [...prev, category])
+                              } else {
+                                setSelectedCategories((prev) => prev.filter((c) => c !== category))
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`category-${category}`}
+                            className="flex-1 p-3 rounded cursor-pointer bg-blue-50 hover:bg-blue-100"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{category}</span>
+                              <span className="text-sm text-gray-600">({problemCount}問)</span>
+                            </div>
+                          </label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* 出題方法選択 */}
+                <div>
+                  <Label className="text-base font-semibold mb-3 block">出題方法</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {questionOrderOptions.filter((option, index, self) =>
+                      index === self.findIndex((o) => o.type === option.type)
+                    ).map((option) => (
+                      <Button
+                        key={option.type}
+                        variant={questionOrderNew === option.type ? "default" : "outline"}
+                        className="h-auto py-3"
+                        onClick={() => setQuestionOrderNew(option.type)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* アクションボタン */}
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    onClick={() =>
+                      startSessionWithUnifiedSettings(
+                        selectionType,
+                        selectionType === "folder" ? selectedFoldersNew : selectedCategories,
+                        questionOrderNew,
+                      )
+                    }
+                    disabled={
+                      (selectionType === "folder" && selectedFoldersNew.length === 0) ||
+                      (selectionType === "category" && selectedCategories.length === 0)
+                    }
+                    className="flex-1"
+                    size="lg"
+                  >
+                    学習開始 (
+                    {selectionType === "folder"
+                      ? `${selectedFoldersNew.length}フォルダ`
+                      : `${selectedCategories.length}カテゴリ`}
+                    )
+                  </Button>
+                  <Button onClick={() => setShowUnifiedStartModal(false)} variant="outline" size="lg">
                     キャンセル
                   </Button>
                 </div>
