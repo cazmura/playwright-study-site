@@ -1,4 +1,5 @@
-export const maxDuration = 30
+// Extend maxDuration to reduce upstream 504s on slower responses
+export const maxDuration = 60
 
 interface Message {
   role: "user" | "assistant" | "system"
@@ -34,18 +35,19 @@ export async function POST(req: Request) {
       throw new Error("OPENAI_API_KEY is not set")
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `あなたはPlaywrightの学習支援AIです。ユーザーの要望を聞いて、適切な学習問題を作成します。
+    // Prepare OpenAI request with abort controller for timeout handling
+    const controller = new AbortController()
+    const OPENAI_TIMEOUT_MS = 25000 // keep within route maxDuration
+    const QUICK_FALLBACK_MS = 8000 // prompt user quickly if it will take long
+
+    const timer = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS)
+
+    const buildOpenAIPayload = () => ({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `あなたはPlaywrightの学習支援AIです。ユーザーの要望を聞いて、適切な学習問題を作成します。
 
 ## 利用可能なフォルダ
 
@@ -68,7 +70,7 @@ ${categories && categories.length > 0 ? categories.map((c: string) => `- ${c}`).
 2. **曖昧な要件の場合**：
    - ユーザーの要望が抽象的な場合は、フォルダと問題数を確認してください
    - 例：「Playwrightを学びたい」→ 「どのフォルダに何問作成しますか？」
-   - 必要に応じて、学習レベルや具体的な内容も確認してください
+   - 必要に応じて、具体的な内容のみ確認してください（学習レベルは確認しない）
 
 3. **複数問題の作成**：
    - ユーザーが複数問題を要求した場合、createProblemsツールを使用してください（一度に複数問題を作成）
@@ -76,7 +78,7 @@ ${categories && categories.length > 0 ? categories.map((c: string) => `- ${c}`).
    - 1問のみの場合はcreateProblemツールを使用してください
 
 4. **問題作成のガイドライン**：
-   - 問題の難易度は、ユーザーのレベルに応じて1（初級）、2（中級）、3（上級）から選択してください
+   - 問題の難易度は内部的に適切なものを選び、ユーザーが明示した場合のみ反映してください（未指定なら1を使用）
    - expectedCode は**1〜数行のPlaywrightコード**とし、必要なら条件分岐（if）、待機、ロケータ操作などを用いてください
    - ただし、expectedCode 内にコメントや console 出力は含めないでください（純粋なコードのみ）
    - 問題文は、ユーザーが正解を予想できるように「前提状態・対象要素のセレクタ・条件・目標」を具体的に記述してください
@@ -110,169 +112,237 @@ ${categories && categories.length > 0 ? categories.map((c: string) => `- ${c}`).
    （課題で遷移を求めていないのに不要な操作が含まれている/目的が曖昧/コメントやconsole出力が含まれる など）
 
 問題を作成する際は、必ずcreateProblemツールを呼び出してください。`,
-          },
-          ...messages,
-        ],
-        temperature: 0.4,
-        max_tokens: 2000,
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "createProblems",
-              description: "複数のPlaywright学習問題を一度に作成して登録します",
-              parameters: {
-                type: "object",
-                properties: {
-                  problems: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        title: { type: "string", description: "問題のタイトル" },
-                        description: { type: "string", description: "問題の説明" },
-                        expectedCode: { type: "string", description: "期待される回答コード（1〜数行のPlaywrightコード）" },
-                        alternativeAnswers: { type: "array", items: { type: "string" }, description: "代替解答のリスト" },
-                        hints: { type: "array", items: { type: "string" }, description: "ヒントのリスト" },
-                        difficulty: { type: "number", minimum: 1, maximum: 3, description: "難易度" },
-                        category: { type: "string", description: "カテゴリ名" },
-                        folderId: { type: "string", description: "フォルダID" },
-                      },
-                      required: ["title", "description", "expectedCode", "alternativeAnswers", "hints", "difficulty", "category", "folderId"],
+        },
+        ...messages,
+      ],
+      temperature: 0.4,
+      max_tokens: 2000,
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "createProblems",
+            description: "複数のPlaywright学習問題を一度に作成して登録します",
+            parameters: {
+              type: "object",
+              properties: {
+                problems: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: { type: "string", description: "問題のタイトル" },
+                      description: { type: "string", description: "問題の説明" },
+                      expectedCode: { type: "string", description: "期待される回答コード（1〜数行のPlaywrightコード）" },
+                      alternativeAnswers: { type: "array", items: { type: "string" }, description: "代替解答のリスト" },
+                      hints: { type: "array", items: { type: "string" }, description: "ヒントのリスト" },
+                      difficulty: { type: "number", minimum: 1, maximum: 3, description: "難易度" },
+                      category: { type: "string", description: "カテゴリ名" },
+                      folderId: { type: "string", description: "フォルダID" },
                     },
-                    description: "作成する問題のリスト",
+                    required: ["title", "description", "expectedCode", "alternativeAnswers", "hints", "difficulty", "category", "folderId"],
                   },
+                  description: "作成する問題のリスト",
                 },
-                required: ["problems"],
               },
+              required: ["problems"],
             },
           },
-          {
-            type: "function",
-            function: {
-              name: "createProblem",
-              description: "Playwrightの学習問題を1問作成して登録します",
-              parameters: {
-                type: "object",
-                properties: {
-                  title: {
-                    type: "string",
-                    description: "問題のタイトル",
-                  },
-                  description: {
-                    type: "string",
-                    description: "問題の説明（何をするべきか明確に記述）",
-                  },
-                  expectedCode: {
-                    type: "string",
-                    description: "期待される回答コード（Playwrightのコード）",
-                  },
-                  alternativeAnswers: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "代替解答のリスト",
-                  },
-                  hints: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "ヒントのリスト",
-                  },
-                  difficulty: {
-                    type: "number",
-                    minimum: 1,
-                    maximum: 3,
-                    description: "難易度（1: 初級, 2: 中級, 3: 上級）",
-                  },
-                  category: {
-                    type: "string",
-                    description: "カテゴリ名（例: 基本操作、要素の取得、フォーム入力など）",
-                  },
-                  folderId: {
-                    type: "string",
-                    description: "フォルダID（ユーザーが指定したフォルダに格納します）",
-                  },
+        },
+        {
+          type: "function",
+          function: {
+            name: "createProblem",
+            description: "Playwrightの学習問題を1問作成して登録します",
+            parameters: {
+              type: "object",
+              properties: {
+                title: {
+                  type: "string",
+                  description: "問題のタイトル",
                 },
-                required: [
-                  "title",
-                  "description",
-                  "expectedCode",
-                  "alternativeAnswers",
-                  "hints",
-                  "difficulty",
-                  "category",
-                  "folderId",
-                ],
+                description: {
+                  type: "string",
+                  description: "問題の説明（何をするべきか明確に記述）",
+                },
+                expectedCode: {
+                  type: "string",
+                  description: "期待される回答コード（Playwrightのコード）",
+                },
+                alternativeAnswers: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "代替解答のリスト",
+                },
+                hints: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "ヒントのリスト",
+                },
+                difficulty: {
+                  type: "number",
+                  minimum: 1,
+                  maximum: 3,
+                  description: "難易度（1: 初級, 2: 中級, 3: 上級）",
+                },
+                category: {
+                  type: "string",
+                  description: "カテゴリ名（例: 基本操作、要素の取得、フォーム入力など）",
+                },
+                folderId: {
+                  type: "string",
+                  description: "フォルダID（ユーザーが指定したフォルダに格納します）",
+                },
               },
+              required: [
+                "title",
+                "description",
+                "expectedCode",
+                "alternativeAnswers",
+                "hints",
+                "difficulty",
+                "category",
+                "folderId",
+              ],
             },
           },
-        ],
-        tool_choice: "auto",
-      }),
+        },
+      ],
+      tool_choice: "auto",
     })
 
-    if (!response.ok) {
-      const error = await response.text()
-      console.error("[v0] OpenAI API Error:", error)
-      throw new Error(`OpenAI API error: ${response.status}`)
-    }
+    // Main OpenAI call promise (returns a Response)
+    const openAICallPromise = (async () => {
+      try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify(buildOpenAIPayload()),
+          signal: controller.signal,
+        })
 
-    const data: OpenAIResponse = await response.json()
-    console.log("[v0] AI Chat - Response received")
+        if (!response.ok) {
+          const error = await response.text()
+          console.error("[v0] OpenAI API Error:", error)
+          throw new Error(`OpenAI API error: ${response.status}`)
+        }
 
-    const assistantMessage = data.choices[0].message
+        const data: OpenAIResponse = await response.json()
+        console.log("[v0] AI Chat - Response received")
 
-    // Check if tool was called
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      const toolCall = assistantMessage.tool_calls[0]
+        const assistantMessage = data.choices[0].message
 
-      if (toolCall.function.name === "createProblems") {
-        const problemsData = JSON.parse(toolCall.function.arguments)
-        console.log("[v0] AI Chat - Multiple problems created:", problemsData.problems.length)
+      // Check if tool was called
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        const toolCall = assistantMessage.tool_calls[0]
+
+        if (toolCall.function.name === "createProblems") {
+          const problemsData = JSON.parse(toolCall.function.arguments)
+          console.log("[v0] AI Chat - Multiple problems created:", problemsData.problems.length)
+
+          return new Response(
+            JSON.stringify({
+              role: "assistant",
+              content: assistantMessage.content || `${problemsData.problems.length}問の問題を作成しました。`,
+              toolCall: {
+                name: "createProblems",
+                parameters: problemsData,
+              },
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          )
+        }
+
+        if (toolCall.function.name === "createProblem") {
+          const problemData = JSON.parse(toolCall.function.arguments)
+          console.log("[v0] AI Chat - Problem created:", problemData.title)
+
+          return new Response(
+            JSON.stringify({
+              role: "assistant",
+              content: assistantMessage.content || `問題「${problemData.title}」を作成しました。`,
+              toolCall: {
+                name: "createProblem",
+                parameters: problemData,
+              },
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          )
+        }
+      }
 
         return new Response(
           JSON.stringify({
             role: "assistant",
-            content: assistantMessage.content || `${problemsData.problems.length}問の問題を作成しました。`,
-            toolCall: {
-              name: "createProblems",
-              parameters: problemsData,
-            },
+            content: assistantMessage.content,
           }),
           {
             headers: { "Content-Type": "application/json" },
           },
         )
+      } catch (err: any) {
+        // Swallow abort errors to avoid unhandled rejections when fallback wins the race
+        if (err?.name === "AbortError") {
+          console.warn("[v0] OpenAI request aborted due to timeout/fallback")
+          return new Response(
+            JSON.stringify({
+              role: "assistant",
+              content: "", // ignored when fallback already sent
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          )
+        }
+        throw err
       }
+    })()
 
-      if (toolCall.function.name === "createProblem") {
-        const problemData = JSON.parse(toolCall.function.arguments)
-        console.log("[v0] AI Chat - Problem created:", problemData.title)
+    // Quick fallback that asks clarifying questions if the above takes too long
+    const fallbackPromise = new Promise<Response>((resolve) => {
+      setTimeout(() => {
+        try {
+          controller.abort()
+        } catch {}
 
-        return new Response(
+        const folderOptions = (folders && folders.length > 0)
+          ? folders.map((f: any) => `- ${f.name} (ID: ${f.id})`).join("\n")
+          : "※フォルダがありません"
+        const categoryOptions = (categories && categories.length > 0)
+          ? categories.map((c: string) => `- ${c}`).join("\n")
+          : "※カテゴリがありません"
+
+        const quickContent = [
+          "少し時間がかかりそうなので、要件を整理させてください。以下を教えてください：",
+          "",
+          "1) どのフォルダに作成しますか？",
+          folderOptions,
+          "",
+          "2) カテゴリはどれにしますか？",
+          categoryOptions,
+          "",
+          "3) 何問作成しますか？（未指定なら1問）",
+        ].join("\n")
+
+        resolve(new Response(
           JSON.stringify({
             role: "assistant",
-            content: assistantMessage.content || `問題「${problemData.title}」を作成しました。`,
-            toolCall: {
-              name: "createProblem",
-              parameters: problemData,
-            },
+            content: quickContent,
           }),
-          {
-            headers: { "Content-Type": "application/json" },
-          },
-        )
-      }
-    }
+          { headers: { "Content-Type": "application/json" } },
+        ))
+      }, QUICK_FALLBACK_MS)
+    })
 
-    return new Response(
-      JSON.stringify({
-        role: "assistant",
-        content: assistantMessage.content,
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      },
-    )
+    // Race the real call vs quick fallback
+    const result = await Promise.race([openAICallPromise, fallbackPromise])
+    clearTimeout(timer)
+    return result
   } catch (error) {
     console.error("[v0] AI Chat - Error:", error)
     return new Response(
